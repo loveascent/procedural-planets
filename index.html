@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -49,6 +49,19 @@
   .hud .meta { font: 12px/1.4 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
   #fps { color: var(--accent); }
 
+  /* Ladebild: dahinter rechnet die Simulation im Schnelldurchlauf vor. */
+  #loading {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    background: radial-gradient(circle at 50% 55%, #14120f 0%, var(--space) 70%);
+    transition: opacity 0.8s ease; z-index: 2;
+  }
+  #loading.done { opacity: 0; pointer-events: none; }
+  .load-box { width: min(320px, 80%); display: grid; gap: 10px; text-align: center; }
+  #load-title { margin: 0; font: 600 18px var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); }
+  .load-track { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  #load-bar { display: block; height: 100%; width: 0%; background: var(--accent); transition: width 0.2s linear; }
+  #load-note { margin: 0; min-height: 1.4em; font: 12px var(--mono); color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) { #loading { transition: none; } }
   #status {
     position: absolute; inset: auto 16px 16px 16px; max-width: 520px; padding: 12px 14px;
     background: #2a1512; border: 1px solid #7a3326; border-radius: 6px; color: #f6d9cf;
@@ -62,6 +75,8 @@
     backdrop-filter: blur(8px);
   }
   #panel-toggle { display: none; }
+  .panel-head { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 8px; }
+  #lang { font: 600 12px var(--mono); letter-spacing: 0.08em; padding: 5px 9px; }
   .help {
     margin: 0 0 12px; padding: 10px 12px; min-height: 5.8em;
     border: 1px solid var(--line); border-radius: 6px; background: rgba(0, 0, 0, 0.35);
@@ -93,6 +108,20 @@
   .row-toggle label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
   .row-toggle input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
   .row-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+  .row-save { display: flex; gap: 8px; align-items: center; }
+  .row-save input, .row-save select { flex: 1; min-width: 0; }
+  input[type=text] {
+    font: 13px var(--body); color: var(--text); background: #1b1c22; border: 1px solid var(--line);
+    border-radius: 5px; padding: 6px 8px;
+  }
+  button:disabled { opacity: 0.45; cursor: default; }
+  .reset-hint { color: var(--muted); }
+  .row label { cursor: default; user-select: none; }
+  .row-file input { grid-column: 1 / -1; width: 100%; font: 12px var(--body); color: var(--muted); }
+  .row-file input::file-selector-button {
+    font: 13px var(--body); color: var(--text); background: #1b1c22; border: 1px solid var(--line);
+    border-radius: 5px; padding: 6px 8px; margin-right: 8px; cursor: pointer;
+  }
   button { cursor: pointer; }
   button:hover { border-color: var(--accent-dim); }
   :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -109,8 +138,9 @@
       padding-block: 0 calc(24px + env(safe-area-inset-bottom, 0px));
     }
     aside.open { transform: none; }
+    .panel-head { position: sticky; top: 0; z-index: 1; background: var(--panel); margin-bottom: 8px; }
     #panel-toggle {
-      display: flex; width: 100%; justify-content: space-between; align-items: center;
+      display: flex; flex: 1; justify-content: space-between; align-items: center;
       position: sticky; top: 0; z-index: 1; margin-bottom: 8px; padding: 14px 2px;
       background: none; border: 0; border-radius: 0; color: var(--text);
       font: 600 15px var(--display); letter-spacing: 0.08em; text-transform: uppercase;
@@ -124,22 +154,25 @@
 <body>
 <div id="app">
   <div id="stage">
-    <canvas id="view" aria-label="Echtzeit-Simulation eines Gasplaneten"></canvas>
+    <canvas id="view" aria-label="Real-time gas giant simulation"></canvas>
     <div class="hud">
       <h1>Procedural Planets</h1>
       <div class="meta" id="planet-info">Jupiter</div>
-      <div class="meta"><span id="fps">– fps</span> · ziehen zum Drehen, Mausrad oder zwei Finger zum Zoomen</div>
+      <div class="meta"><span id="fps">– fps</span> · <span id="hint">drag to rotate, scroll or pinch to zoom</span></div>
+    </div>
+    <div id="loading" role="status" aria-live="polite">
+      <div class="load-box">
+        <p id="load-title">Spinning up the atmosphere</p>
+        <div class="load-track"><span id="load-bar"></span></div>
+        <p id="load-note"></p>
+      </div>
     </div>
     <div id="status" hidden></div>
   </div>
   <aside id="panel">
-    <button id="panel-toggle" type="button" aria-expanded="false" aria-controls="panel-body">Regler <span aria-hidden="true">▴</span></button>
+    <div class="panel-head"><button id="panel-toggle" type="button" aria-expanded="false" aria-controls="panel-body"><span id="panel-title">Controls</span> <span aria-hidden="true">▴</span></button><button id="lang" type="button">DE</button></div>
     <div id="panel-body"></div>
-    <p class="credits">
-      Echtzeit-WebGPU, keine Bilddateien. Verfahren nach
-      <a href="https://mofu-dev.com/en/blog/stable-fluids/" target="_blank" rel="noopener">mofu (Stable Fluids)</a> und
-      <a href="https://jasper-r.github.io/gas-giant" target="_blank" rel="noopener">jasper-r (Partikel)</a>.
-    </p>
+    <p class="credits" id="credits"></p>
   </aside>
 </div>
 <script>
@@ -149,7 +182,7 @@
     btn.addEventListener('click', function () {
       var open = aside.classList.toggle('open');
       btn.setAttribute('aria-expanded', String(open));
-      btn.lastElementChild.textContent = open ? '▾' : '▴';
+      btn.querySelector('[aria-hidden]').textContent = open ? '▾' : '▴';
     });
   })();
 </script>

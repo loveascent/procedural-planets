@@ -1,3 +1,5 @@
+import { t } from './i18n';
+
 // Kleines Reglerpanel ohne Abhängigkeiten. Jeder Regler hat einen Erklärtext, der im
 // Kasten "Was passiert hier?" erscheint, sobald man den Regler berührt.
 
@@ -15,11 +17,12 @@ export class Panel {
     root: HTMLElement,
     private s: Settings,
     private onChange: (key: string) => void,
+    private defaults?: Settings,
   ) {
     this.help = document.createElement('p');
     this.help.className = 'help';
     this.help.id = 'help';
-    this.help.textContent = 'Tippe oder fahre über einen Regler, um zu sehen, was er in der Simulation verändert.';
+    this.help.textContent = t('Tippe oder fahre über einen Regler, um zu sehen, was er in der Simulation verändert.', 'Tap or hover a control to see what it changes in the simulation.');
     this.body = document.createElement('div');
     this.body.className = 'controls';
     root.append(this.help, this.body);
@@ -51,7 +54,16 @@ export class Panel {
     const out = document.createElement('output');
     out.htmlFor = `ctl-${key}`;
     row.append(lab, out);
-    const show = () => { this.help.innerHTML = `<b>${label}.</b> ${hint}`; };
+    const reset = this.defaults && key in this.defaults ? t(' Doppelklick auf den Namen setzt nur diesen Regler zurück.', ' Double-click the name to reset just this control.') : '';
+    const show = () => { this.help.innerHTML = `<b>${label}.</b> ${hint}<span class="reset-hint">${reset}</span>`; };
+    // Doppelklick auf den Namen: nur diesen Regler auf den Standard zurücksetzen
+    lab.addEventListener('dblclick', (e) => {
+      if (!this.defaults || !(key in this.defaults)) return;
+      e.preventDefault();
+      this.s[key] = this.defaults[key];
+      this.refresh();
+      this.onChange(key);
+    });
     row.addEventListener('pointerenter', show);
     row.addEventListener('focusin', show);
     row.addEventListener('pointerdown', show);
@@ -126,6 +138,27 @@ export class Panel {
       row.append(b);
     }
     (this.current ?? this.body).append(row);
+    return this;
+  }
+
+  file(id: string, label: string, hint: string, onFile: (f: File) => void): this {
+    const { row, lab, out } = this.row(id, label, hint);
+    out.remove();
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.id = `ctl-${id}`;
+    input.className = 'file';
+    lab.htmlFor = input.id;
+    row.classList.add('row-file');
+    row.append(input);
+    input.addEventListener('change', () => { if (input.files?.[0]) onFile(input.files[0]); input.value = ''; });
+    return this;
+  }
+
+  /** Beliebiges eigenes Element in den aktuellen Abschnitt setzen. */
+  custom(el: HTMLElement): this {
+    (this.current ?? this.body).append(el);
     return this;
   }
 

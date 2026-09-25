@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "Wenn du dieses Projekt nutzt oder darauf aufbaust, zitiere es bitte so. / If you use or build on this project, please cite it as below."
+title: "Procedural Planets: real-time gas giants with fluid simulation in WebGPU"
+type: software
+authors:
+  - alias: loveascent
+repository-code: "https://github.com/loveascent/procedural-planets"
+license: Apache-2.0
+version: 0.2.3-unverified
+date-released: 2026-09-25
+keywords:
+  - webgpu
+  - wgsl
+  - fluid simulation
+  - stable fluids
+  - gas giant
+  - jupiter
+  - procedural planet
+  - cube sphere
+abstract: >-
+  Real-time rendering of gas giants without image textures: fluid simulation (Stable Fluids) on a
+  cube-sphere grid, particle advection following the Gaseous Giganticus method, physically motivated
+  jets, storms and lighting, entirely on the GPU in WebGPU/WGSL.
