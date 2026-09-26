@@ -11,7 +11,14 @@ evaluation on real hardware, and the decisive expert objections during developme
 - “the scars were not there before” (led to measuring the cube-map sampling error at edges),
 - the image of pouring cream into coffee as a test for sources, obstacles and sharp transport,
 - the comparison with the Alien: Isolation gas giant (led to “separate the scales”, ROADMAP 1a),
-- view-dependent detail: “the closer you zoom, the better, without losing fps” (ROADMAP 1a).
+- view-dependent detail: “the closer you zoom, the better, without losing fps” (ROADMAP 1a;
+  in v0.3 the particle track’s “View focus”),
+- v0.3 review: the “teacup scale” of speeds (led to findings 9–10: simulation tied to the frame rate,
+  wind-to-rotation ratio), storms that should emerge and grow from the maths (finding 11), that the
+  particle track did not look like jasper-r because both methods were mixed (finding 12), the help-box
+  jitter bug, retrograde rotation and hemisphere-dependent storm spin, clouds over continents (the
+  terrain preview), 3D rings and moons as next steps, and the working rule “build new tracks instead
+  of making things worse”.
 
 Implemented with the help of **Claude** (Anthropic) as an AI programming assistant.
 
@@ -40,7 +47,8 @@ implementation is original. Thanks to the authors:
 | Mark Jarzynski, Marc Olano, *Hash Functions for GPU Rendering*, JCGT 2020 | `pcg3d` hash |
 | Marcel Minnaert, 1941 | limb darkening |
 | Krzysztof Narkowicz, *ACES Filmic Tone Mapping Curve* (2016) | tone mapping |
-| Max & Becker 1995; Perlin & Neyret 2001; Neyret 2003 | advected textures / flow noise (planned, ROADMAP 1a) |
+| Max & Becker 1995; Perlin & Neyret 2001; Neyret 2003 | advected textures / flow noise (ROADMAP 1a; two-phase trick used for the clouds in `demos/terrain.html`) |
+| Showman 2007; Scott & Polvani 2007 | forced shallow-water turbulence: storms as mass pulses, jets and vortices emerge (ROADMAP 1c, see [docs/RESEARCH.md](docs/RESEARCH.md)) |
 
 ### Physics and measurements (for calibration only; no images in the project)
 | Source | Use |
@@ -51,6 +59,7 @@ implementation is original. Thanks to the authors:
 | Dowling et al. 1998, EPIC model ([NASA-Planetary-Science/EPIC_Atmospheric_Model](https://github.com/NASA-Planetary-Science/EPIC_Atmospheric_Model)) | reference for layered gas-giant atmospheres |
 | NASA/JPL Juno, Bolton et al. 2021 | depth of the Great Red Spot (pancake vortex) |
 
+The recording in `docs/media/` was made by loveascent on real hardware.
 Images from NASA, Juno, Hubble, games and the web were only used as references during development
 and are **not** part of the repository. Screenshots in `docs/images/` are renders of this project.
 

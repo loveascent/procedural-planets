@@ -2,7 +2,7 @@ import commonWGSL from './shaders/common.wgsl?raw';
 import fluidWGSL from './shaders/fluid.wgsl?raw';
 import tracersWGSL from './shaders/tracers.wgsl?raw';
 import renderWGSL from './shaders/render.wgsl?raw';
-import { presets, randomPreset, newSeed, bandsFromImage, windTable, bandTable, hexToLinear, TABLE, type Preset } from './presets';
+import { presets, randomPreset, newSeed, bandsFromImage, windTable, bandTable, hexToLinear, TABLE, type Preset, type RandomOptions } from './presets';
 import { perspective, lookAt, multiply, invert, planetRotation, normalize, type Vec3 } from './math';
 import { Panel } from './ui';
 import { t, lang, setLang } from './i18n';
@@ -11,17 +11,23 @@ import { t, lang, setLang } from './i18n';
 // Einstellungen (alles, was ein Regler verändern kann)
 // ---------------------------------------------------------------------------
 
+declare const __VERSION__: string;
+
 const isPhone = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820;
 
 const S = {
   preset: 'Jupiter',
   seed: 1,
   quality: isPhone ? 'phone' : 'standard',
-  flow: 'fluid',          // 'fluid' = Stable Fluids, 'curl' = Curl-Noise
-  look: 'dye',            // 'dye' = Farbstoff, 'particles' = Partikel
-  timeScale: 1,           // Simulationsschritte pro Bild (fester Zeitschritt)
+  // Rechenmodell und Darstellung, frei kombinierbar:
+  flow: 'fluid',          // 'fluid' = Stable Fluids (mofu), 'curl' = Curl-Noise (jasper-r / Gaseous Giganticus)
+  look: 'dye',            // 'dye' = Farbstoff, 'particles' = Partikel mit Bandfarben, 'pure' = reine Partikel (jasper-r)
+  timeScale: 1,           // Tempo: Simulationszeit pro Sekunde Echtzeit (ändert nur die Geschwindigkeit, nicht die Form)
+  retro: false,           // Drehrichtung rückläufig: spiegelt Rotation, Jets und Sturm-Drehsinn
+  seamless: false,        // nahtlos exakte Abtastung an Würfelkanten (für GPUs ohne nahtlose Cubemaps)
   paused: false,
   autoQuality: true,       // hält ≥ 60 fps: misst beim Laden, passt Auflösung an
+  pixelDensity: isPhone ? 1 : 1.25,  // Render-Pixel pro CSS-Pixel (über 1 = Supersampling)
   // Fluid
   velRes: 128,
   iterations: 24,
@@ -46,6 +52,13 @@ const S = {
   lifetime: 6,
   opacity: 0.35,
   blur: 0.12,
+  fade: 0.05,             // Partikel-Schiene: Verblassen zur Mittelfarbe (1/s)
+  viewFocus: 0,           // Anteil der Partikel, die im Sichtfeld geboren werden
+  // Zufallsplanet
+  rndFamily: '',
+  rndBands: 0,
+  rndStorms: 'auto',
+  rndRings: 'auto',
   // Farbe und Stürme
   dyeRes: isPhone ? 384 : 768,
   bandRelax: 0.06,
@@ -55,26 +68,36 @@ const S = {
   convection: 0.8,
   storms: true,
   stormStrength: 1,
+  stormSize: 1,
+  eddyStrength: 1,        // Strudel-Stärke: Antrieb von Turbulenz, Stürmen und Wirbeln, getrennt von der Jet-Geschwindigkeit           // Größe der Stürme (Radius-Faktor), unabhängig vom Drehtempo
   stormTint: 0.6,
   stormHold: 1,
   stormSpawn: 0.3,
+  kickLife: 2.5,          // Sekunden, die ein neuer Sturm angetrieben wird, danach lebt er frei
   // Licht und Ansicht
   sunAngle: 35,
   relief: 0.35,
   limb: 1.15,
   atmosphere: 1,
   exposure: 0.95,
-  spinSpeed: 1,
+  spinSpeed: 0.5,
   view: 0,
   map: false,
 };
 type Key = keyof typeof S;
 const DEFAULTS = { ...S };
 
-const QUALITY: Record<string, { velRes: number; dyeRes: number; curlRes: number; particles: number; dpr: number }> = {
-  phone: { velRes: 96, dyeRes: 384, curlRes: 256, particles: 262144, dpr: 1 },
-  standard: { velRes: 128, dyeRes: 768, curlRes: 384, particles: 1048576, dpr: 1.25 },
-  high: { velRes: 192, dyeRes: 1024, curlRes: 768, particles: 4194304, dpr: 1.75 },
+// Geräteklassen: Startwerte und Obergrenzen der Regler. "ultra" schaltet die großen Werte frei.
+const QUALITY: Record<string, { velRes: number; dyeRes: number; curlRes: number; particles: number; dpr: number;
+  max: { velRes: number; dyeRes: number; curlRes: number; particles: number } }> = {
+  phone: { velRes: 96, dyeRes: 384, curlRes: 256, particles: 262144, dpr: 1,
+    max: { velRes: 128, dyeRes: 768, curlRes: 512, particles: 1048576 } },
+  standard: { velRes: 128, dyeRes: 768, curlRes: 384, particles: 1048576, dpr: 1.25,
+    max: { velRes: 192, dyeRes: 1024, curlRes: 768, particles: 4194304 } },
+  high: { velRes: 192, dyeRes: 1024, curlRes: 768, particles: 4194304, dpr: 1.75,
+    max: { velRes: 256, dyeRes: 1536, curlRes: 1024, particles: 8388608 } },
+  ultra: { velRes: 256, dyeRes: 1536, curlRes: 1024, particles: 8388608, dpr: 2,
+    max: { velRes: 1024, dyeRes: 8192, curlRes: 4096, particles: 67108864 } },
 };
 
 // ---------------------------------------------------------------------------
@@ -108,6 +131,7 @@ async function start() {
     requiredLimits: {
       maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
       maxBufferSize: adapter.limits.maxBufferSize,
+      maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
     },
   });
   device.lost.then((info) => fail(`${t('<b>Die Grafikkarte wurde getrennt.</b>', '<b>The GPU was disconnected.</b>')} ${info.message} ${t('Lade die Seite neu.', 'Reload the page.')}`));
@@ -116,7 +140,10 @@ async function start() {
     fail(`<b>GPU-Fehler:</b> ${(e as GPUUncapturedErrorEvent).error.message}`);
   });
   const app = new App(device);
-  window.gasPlanet = { settings: S, capture: () => app.capture(), readRow: (w, f, y) => app.readRow(w, f, y) };
+  window.gasPlanet = {
+    settings: S, capture: () => app.capture(), readRow: (w, f, y) => app.readRow(w, f, y),
+    filmstrip: (o) => app.filmstrip(o), selftest: () => app.selftest(), frame: () => app.frameCount(),
+  };
   document.getElementById('lang')?.addEventListener('click', () => app.toggleLang());
   window.addEventListener('keydown', (e) => {
     const tag = (e.target as HTMLElement)?.tagName;
@@ -135,10 +162,16 @@ async function start() {
 
 interface CubeField { tex: GPUTexture; cube: GPUTextureView; store: GPUTextureView; n: number }
 
+interface FilmOptions { frames?: number; cols?: number; scale?: number; everySeconds?: number; everySteps?: number }
+interface Filmstrip { image: string; stats: { t: number; frame: number; fps: number; detail: number; change: number }[] }
+
 // Aufbau des Sim-Uniforms (in floats), muss zu struct Sim in common.wgsl passen.
 const MAX_STORMS = 16;
 const OFF_CLOUD = 32;
-const OFF_JETS = OFF_CLOUD + 4;
+const OFF_CENTRE = OFF_CLOUD + 4;
+const OFF_VIEW = OFF_CENTRE + 4;
+const OFF_MODE = OFF_VIEW + 4;
+const OFF_JETS = OFF_MODE + 4;
 const OFF_BANDS = OFF_JETS + TABLE;
 const OFF_STORMS = OFF_BANDS + TABLE * 4;
 const OFF_INFO = OFF_STORMS + MAX_STORMS * 4;
@@ -151,21 +184,23 @@ const DT = 1 / 60;
 // Planet "mitten im Geschehen" erscheint statt sichtbar bei null anzufangen.
 const WARM_STEPS = 1200;
 // Stufen für die automatische Qualität: [Windgitter, Farbauflösung]
-const AUTO_TIERS: [number, number][] = [[192, 1024], [128, 768], [128, 512], [96, 384], [64, 256]];
+const AUTO_TIERS: [number, number][] = [[256, 1536], [192, 1024], [128, 768], [128, 512], [96, 384], [64, 256]];
 // Budget für einen Simulationsschritt, damit neben dem Rendern 60 fps bleiben (16,7 ms pro Bild)
 const STEP_BUDGET_MS = 8;
 const MAX_LOAD_MS = 5000;
-const KICK_LIFE = 2.5;
 
 interface Storm {
   lat: number; lon: number; radius: number; sign: number; strength: number;
   color: [number, number, number];
-  kick: number;   // 0 = Sturm aus der Vorlage, >0 = Restlebensdauer eines neu entstehenden Sturms
+  kick: number;   // 0 = Sturm aus der Vorlage, >0 = restliche Antriebszeit eines neu entstehenden Sturms
+  life: number;   // gesamte Antriebszeit eines neuen Sturms
 }
 
 class App {
   // Testmodus #offscreen: rendert in eine Textur statt auf den Canvas (für Headless-Browser).
-  private offscreen = location.hash === '#offscreen';
+  private offscreen = location.hash.startsWith('#offscreen');
+  // Testmodus: #offscreen&warm=300 verkürzt das Vorrechnen (Software-Renderer sind langsam).
+  private warmSteps = Number(new URLSearchParams(location.hash.slice(1)).get('warm')) || WARM_STEPS;
   private format: GPUTextureFormat = this.offscreen ? 'rgba8unorm' : navigator.gpu.getPreferredCanvasFormat();
   private target: GPUTexture | null = null;
   private ctx = canvas.getContext('webgpu') as GPUCanvasContext;
@@ -176,7 +211,10 @@ class App {
   private renderData = new Float32Array(RENDER_FLOATS);
 
   private computeLayout: GPUBindGroupLayout;
+  private fluidModule: GPUShaderModule;
+  private tracerModule: GPUShaderModule;
   private pipes: Record<string, GPUComputePipeline> = {};
+  private pipesBuilt: boolean | null = null;
   private renderPipe: GPURenderPipeline;
 
   private vel: CubeField[] = [];
@@ -198,6 +236,8 @@ class App {
   private time = 0;
   private frame = 0;
   private spin = 0;
+  private runSeed = 0;         // "Neu starten": neuer Lauf, gleicher Planet
+  private achieved = 1;        // tatsächlich erreichter Zeitraffer
   private needsInit = true;
   private warm = 0;
   // Vorrechnen: Schritte pro Auftrag, so bemessen, dass ein Auftrag ~40 ms GPU-Zeit braucht.
@@ -205,6 +245,7 @@ class App {
   private warmTotal = WARM_STEPS;
   private stepMs = 0;          // gemessene GPU-Zeit pro Simulationsschritt
   private warmStart = 0;
+  private manualSkip = false;  // Vorspulen per Knopf: volle Länge, keine Begrenzung der Ladezeit
   private calibrated = false;
   private downgrades = 0;
   private renderScale = 1;     // dynamische Render-Auflösung für ≥ 60 fps
@@ -229,15 +270,13 @@ class App {
         { binding: 3, visibility: C, texture: { sampleType: 'float', viewDimension: 'cube' } },
         { binding: 4, visibility: C, storageTexture: { access: 'write-only', format: 'rgba16float', viewDimension: '2d-array' } },
         { binding: 5, visibility: C, buffer: { type: 'storage' } },
+        { binding: 6, visibility: C, texture: { sampleType: 'float', viewDimension: '2d-array' } },
+        { binding: 7, visibility: C, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       ],
     });
-    const layout = device.createPipelineLayout({ bindGroupLayouts: [this.computeLayout] });
-    const fluid = this.module('fluid', commonWGSL + fluidWGSL);
-    const tracers = this.module('tracers', commonWGSL + tracersWGSL);
-    for (const e of ['initVel', 'clear', 'advect', 'curl', 'zonalClear', 'zonalSum', 'forces', 'divergence', 'jacobi', 'project'])
-      this.pipes[e] = device.createComputePipeline({ layout, compute: { module: fluid, entryPoint: e } });
-    for (const e of ['initDye', 'advectDye', 'flowField', 'moveParticles', 'blurRelax'])
-      this.pipes[e] = device.createComputePipeline({ layout, compute: { module: tracers, entryPoint: e } });
+    this.fluidModule = this.module('fluid', commonWGSL + fluidWGSL);
+    this.tracerModule = this.module('tracers', commonWGSL + tracersWGSL);
+    this.buildPipes(false);
 
     const render = this.module('render', renderWGSL);
     this.renderPipe = device.createRenderPipeline({
@@ -254,6 +293,18 @@ class App {
     this.buildUI();
     this.bindInput();
     this.remember();
+  }
+
+  /** Compute-Pipelines, wahlweise mit nahtlos exakter Abtastung an Würfelkanten (SEAMLESS). */
+  private buildPipes(seamless: boolean) {
+    if (this.pipesBuilt === seamless) return;
+    const layout = this.device.createPipelineLayout({ bindGroupLayouts: [this.computeLayout] });
+    const constants = { SEAMLESS: seamless ? 1 : 0 };
+    for (const e of ['initVel', 'clear', 'advect', 'curl', 'zonalClear', 'zonalSum', 'forces', 'divergence', 'jacobi', 'project'])
+      this.pipes[e] = this.device.createComputePipeline({ layout, compute: { module: this.fluidModule, entryPoint: e, constants } });
+    for (const e of ['initDye', 'advectDye', 'flowField', 'moveParticles', 'blurRelax', 'blurFade'])
+      this.pipes[e] = this.device.createComputePipeline({ layout, compute: { module: this.tracerModule, entryPoint: e, constants } });
+    this.pipesBuilt = seamless;
   }
 
   private module(label: string, code: string): GPUShaderModule {
@@ -283,7 +334,8 @@ class App {
   private applyQuality(fromUI: boolean) {
     const q = QUALITY[S.quality];
     if (fromUI && q) { S.velRes = q.velRes; S.dyeRes = q.dyeRes; S.curlRes = q.curlRes; S.particles = q.particles; }
-    this.dpr = q ? q.dpr : 1.5;
+    if (fromUI && q) S.pixelDensity = Math.min(q.dpr, 2);
+    this.dpr = S.pixelDensity;
     this.allocVel();
     this.allocDye();
     this.allocParticles();
@@ -293,17 +345,38 @@ class App {
     for (const f of [...this.vel, ...this.prs]) f.tex.destroy();
     this.aux?.tex.destroy(); this.div?.tex.destroy(); this.flow?.tex.destroy();
     const n = S.velRes;
+    this.device.pushErrorScope('out-of-memory');
     this.vel = [this.cubeField(n), this.cubeField(n)];
     this.prs = [this.cubeField(n), this.cubeField(n)];
     this.aux = this.cubeField(n);
     this.div = this.cubeField(n);
     this.flow = this.cubeField(S.curlRes);
     this.needsInit = true;
+    // Zu wenig Grafikspeicher: Auflösung halbieren statt abzustürzen.
+    this.device.popErrorScope().then((err) => {
+      if (!err) return;
+      if (S.curlRes > 256) S.curlRes = Math.max(256, (S.curlRes / 2) | 0); else S.velRes = Math.max(32, (S.velRes / 2) | 0);
+      this.memoryNote();
+      this.allocVel();
+    });
+  }
+
+  private memoryNote() {
+    this.panel?.refresh();
+    const el = document.getElementById('diag-msg') ?? loadNote;
+    el.textContent = t('Nicht genug Grafikspeicher: Auflösung automatisch halbiert.', 'Not enough GPU memory: resolution halved automatically.');
   }
 
   private allocDye() {
     for (const f of this.dye) f.tex.destroy();
+    this.device.pushErrorScope('out-of-memory');
     this.dye = [this.cubeField(S.dyeRes), this.cubeField(S.dyeRes)];
+    this.device.popErrorScope().then((err) => {
+      if (!err || S.dyeRes <= 128) return;
+      S.dyeRes = Math.max(128, (S.dyeRes / 2) | 0);
+      this.memoryNote();
+      this.allocDye();
+    });
     // Nur die Wolkenfarbe neu aufsetzen, der Wind läuft weiter.
     this.needsDye = true;
   }
@@ -313,12 +386,31 @@ class App {
     S.particles = want;
     if (want <= this.partCapacity) return;
     this.parts?.destroy();
+    this.device.pushErrorScope('out-of-memory');
     this.parts = this.device.createBuffer({ size: want * 32, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.partCapacity = want;
+    // Zu wenig Grafikspeicher: halbieren statt abzustürzen, und im Regler anzeigen.
+    this.device.popErrorScope().then((err) => {
+      if (!err || want <= 16384) return;
+      this.partCapacity = 0;
+      S.particles = Math.max(16384, Math.floor(want / 2 / 16384) * 16384);
+      this.allocParticles();
+      this.panel?.refresh();
+      loadNote.textContent = t(`Nicht genug Grafikspeicher: ${S.particles} Partikel`, `Not enough GPU memory: ${S.particles} particles`);
+    });
+  }
+
+  /** Strömung und Darstellung, die die gewählte Schiene tatsächlich benutzt. */
+  private flowMode(): 'fluid' | 'curl' { return S.flow as 'fluid' | 'curl'; }
+  private lookMode(): 'dye' | 'particles' | 'pure' { return S.look as 'dye' | 'particles' | 'pure'; }
+  private dir(): number { return S.retro ? -1 : 1; }
+
+  private randomOptions(): RandomOptions {
+    return { family: S.rndFamily, bands: S.rndBands, storms: S.rndStorms as RandomOptions['storms'], rings: S.rndRings as RandomOptions['rings'] };
   }
 
   private applyPreset() {
-    const p = S.preset === 'Zufall' ? randomPreset(S.seed) : presets.find((x) => x.name === S.preset) ?? presets[0];
+    const p = S.preset === 'Zufall' ? randomPreset(S.seed, this.randomOptions()) : presets.find((x) => x.name === S.preset) ?? presets[0];
     const t = p.tune;
     S.turbulence = t.turbulence; S.convection = t.convection; S.bandWobble = t.bandWobble;
     S.stormTint = t.stormTint; S.relief = t.relief;
@@ -330,11 +422,12 @@ class App {
   private usePreset(p: Preset) {
     this.preset = p;
     this.storms = this.preset.storms.map((s) => ({
-      lat: s.lat, lon: s.lon, radius: s.radius, strength: s.strength, kick: 0,
-      sign: (s.kind === 'cyclone' ? 1 : -1) * (s.lat >= 0 ? 1 : -1),
+      lat: s.lat, lon: s.lon, radius: s.radius, strength: s.strength, kick: 0, life: 0,
+      sign: (s.kind === 'cyclone' ? 1 : -1) * (s.lat >= 0 ? 1 : -1) * this.dir(),
       color: hexToLinear(s.color),
     }));
-    this.jets = windTable(this.preset);
+    // Rückläufige Drehung = Spiegelbild: Jets und Drehsinn der Stürme kehren sich um.
+    this.jets = windTable(this.preset).map((v) => v * this.dir());
     this.writeTables();
     this.panel?.refresh();
     this.updateInfo();
@@ -380,12 +473,21 @@ class App {
     const snap = JSON.parse(json) as { v: number; s: Partial<typeof S>; preset: Preset };
     const prev = { ...S };
     const prevPreset = JSON.stringify(this.preset);
-    Object.assign(S, snap.s, { paused: prev.paused });
+    // Codes aus v0.3.0 hatten "Schienen": in Strömung + Darstellung übersetzen.
+    const old = snap.s as Partial<typeof S> & { track?: string };
+    const compat: Partial<typeof S> = old.track === 'fluid' ? { flow: 'fluid', look: 'dye' } : old.track === 'particles' ? { flow: 'curl', look: 'pure' } : {};
+    delete old.track;
+    Object.assign(S, old, compat, { paused: prev.paused });
+    this.buildPipes(S.seamless);
+    this.dpr = S.pixelDensity;
+    if (prev.retro !== S.retro) this.spin = -this.spin;
     this.usePreset(snap.preset);
     if (prev.velRes !== S.velRes || prev.curlRes !== S.curlRes) this.allocVel();
     if (prev.dyeRes !== S.dyeRes) this.allocDye();
     if (prev.particles !== S.particles) this.allocParticles();
-    if (prevPreset !== JSON.stringify(snap.preset)) this.needsInit = true;
+    if (prevPreset !== JSON.stringify(snap.preset) || prev.retro !== S.retro) this.needsInit = true;
+    if (prev.flow !== S.flow || prev.look !== S.look) this.needsDye = true;
+    if (prev.quality !== S.quality) { this.buildUI(); return; }
     canvas.classList.toggle('map', S.map);
     this.updateVisibility();
     this.panel.refresh();
@@ -498,11 +600,34 @@ class App {
 
   private jets: Float32Array = new Float32Array(TABLE);
 
+  private centre: [number, number, number] = [0.5, 0.5, 0.5];
+
   private writeTables() {
     const d = this.simData;
     d.set(this.jets, OFF_JETS);
-    d.set(bandTable(this.preset, S.contrast), OFF_BANDS);
+    const bands = bandTable(this.preset, S.contrast);
+    d.set(bands, OFF_BANDS);
     d.set([...hexToLinear(this.preset.cloud), 1], OFF_CLOUD);
+    // Mittelfarbe für die Partikel-Schiene, flächengewichtet (cos Breite)
+    const c = [0, 0, 0]; let wsum = 0;
+    for (let i = 0; i < TABLE; i++) {
+      const w = Math.cos((-0.5 + i / (TABLE - 1)) * Math.PI) + 1e-3;
+      for (let k = 0; k < 3; k++) c[k] += bands[i * 4 + k] * w;
+      wsum += w;
+    }
+    this.centre = [c[0] / wsum, c[1] / wsum, c[2] / wsum];
+  }
+
+  /** Kamerarichtung in Körperkoordinaten (für Partikel im Sichtfeld). */
+  private camBody(): Vec3 {
+    const cy = Math.cos(this.cam.pitch);
+    const eye: Vec3 = [Math.sin(this.cam.yaw) * cy, Math.sin(this.cam.pitch), Math.cos(this.cam.yaw) * cy];
+    const m = planetRotation((this.preset.tilt * Math.PI) / 180, this.spin);
+    return normalize([
+      m[0][0] * eye[0] + m[1][0] * eye[1] + m[2][0] * eye[2],
+      m[0][1] * eye[0] + m[1][1] * eye[1] + m[2][1] * eye[2],
+      m[0][2] * eye[0] + m[1][2] * eye[1] + m[2][2] * eye[2],
+    ]);
   }
 
   private jetAt(latRad: number): number {
@@ -517,24 +642,30 @@ class App {
   private writeSim(dt: number, init = false) {
     const d = this.simData;
     const js = S.jetStrength;
+    // Antrieb der Strudel (Turbulenz, Stürme, Curl-Noise, Wirbel): unabhängig von der Jet-Geschwindigkeit.
+    const eddy = 0.06 * S.eddyStrength;
     const list = this.activeStorms();
     d.set([
       dt, this.time, this.frame, S.velRes,
-      S.dyeRes, this.flow.n, S.vortexStrength, S.omega,
-      js, S.jetRelax, S.turbulence * js * 0.05, S.turbScale,
+      S.dyeRes, this.flow.n, S.vortexStrength, S.omega * this.dir(),
+      js, S.jetRelax, S.turbulence * eddy * 0.05, S.turbScale,
       S.confinement, S.drag, S.fineStripes, S.bfecc ? 1 : 0,
-      S.bandRelax, S.convection, js * S.stormStrength, list.length,
-      S.curlStrength * js, S.curlFreq, S.curlSpeed, S.curlOctaves,
+      S.bandRelax, S.convection, eddy * S.stormStrength, list.length,
+      S.curlStrength * eddy, S.curlFreq, S.curlSpeed, S.curlOctaves,
       S.particles, S.lifetime, S.opacity, S.blur,
-      S.seed, S.bandWobble, S.stormTint, S.vortexCount,
+      // Shader-Rauschen: Planeten-Seed plus Lauf-Seed ("Neu starten" würfelt nur den Lauf neu).
+      (S.seed + this.runSeed) % 100000, S.bandWobble, S.stormTint, S.vortexCount,
     ], 0);
+    d.set([...this.centre, S.fade], OFF_CENTRE);
+    d.set([...this.camBody(), this.lookMode() === 'dye' ? 0 : S.viewFocus], OFF_VIEW);
+    d.set([this.lookMode() === 'pure' ? 1 : 0, eddy, 0, 0], OFF_MODE);
     list.forEach((s, i) => {
       const la = (s.lat * Math.PI) / 180, lo = (s.lon * Math.PI) / 180;
-      d.set([Math.cos(la) * Math.cos(lo), Math.sin(la), Math.cos(la) * Math.sin(lo), (s.radius * Math.PI) / 180], OFF_STORMS + i * 4);
+      d.set([Math.cos(la) * Math.cos(lo), Math.sin(la), Math.cos(la) * Math.sin(lo), (s.radius * S.stormSize * Math.PI) / 180], OFF_STORMS + i * 4);
       d.set([s.sign * s.strength, ...s.color], OFF_INFO + i * 4);
       // Antrieb: Vorlagen-Stürme nur so stark wie "Stürme festhalten" (Curl-Noise hat keine
       // eigene Dynamik, dort immer voll). Neue Stürme: kurzer Stoß, der an- und abschwillt.
-      let w = s.kick > 0 ? Math.sin(Math.PI * (1 - s.kick / KICK_LIFE)) : S.flow === 'curl' ? 1 : S.stormHold;
+      let w = s.kick > 0 ? Math.sin(Math.PI * (1 - s.kick / Math.max(s.life, 1e-3))) : this.flowMode() === 'curl' ? 1 : S.stormHold;
       if (init && s.kick === 0) w = 1;
       d[OFF_WEIGHT + i] = w;
     });
@@ -555,10 +686,17 @@ class App {
     }
     // Vorlagen-Stürme stehen vorne in der Liste; abgelaufene neue Stürme fallen heraus.
     this.storms = this.storms.filter((s, i) => i < this.preset.storms.length || s.kick > 0);
-    // Konvektion stößt neue Wirbel an: meist Antizyklone (weiße Ovale), manchmal Zyklone (dunkle Barken).
-    if (S.flow === 'fluid' && Math.random() < S.stormSpawn * dt && this.activeStorms().length < MAX_STORMS) {
+    // Konvektion stößt neue Wirbel an. Der Drehsinn folgt der Scherung der Jets an dieser Breite
+    // (Hintergrund-Wirbelstärke ζ ≈ −∂U/∂φ): nur ein Wirbel, der mit der Scherung dreht, überlebt
+    // sie. Ob daraus ein Antizyklon (weißes Oval) oder Zyklon (dunkle Barke) wird, ergibt sich
+    // also aus Windprofil, Halbkugel und Drehrichtung des Planeten, nicht aus einem Würfelwurf.
+    if (this.flowMode() === 'fluid' && Math.random() < S.stormSpawn * dt && this.activeStorms().length < MAX_STORMS) {
       const lat = (Math.random() * 2 - 1) * 65;
-      const anti = Math.random() < 0.75;
+      const la = (lat * Math.PI) / 180;
+      const zeta = -(this.jetAt(la + 0.01) - this.jetAt(la - 0.01));
+      const spin = zeta === 0 ? (Math.random() < 0.5 ? 1 : -1) : Math.sign(zeta);
+      // Antizyklon: dreht entgegen der Planetenrotation (Nord: im Uhrzeigersinn).
+      const anti = spin * (lat >= 0 ? 1 : -1) * this.dir() < 0;
       const band = bandTable(this.preset, S.contrast);
       const row = Math.round(((lat + 90) / 180) * (TABLE - 1)) * 4;
       const color: [number, number, number] = anti
@@ -566,8 +704,8 @@ class App {
         : [band[row] * 0.55, band[row + 1] * 0.5, band[row + 2] * 0.45];
       this.storms.push({
         lat, lon: Math.random() * 360, radius: 1.2 + Math.random() * 2.8,
-        sign: (anti ? -1 : 1) * (lat >= 0 ? 1 : -1), strength: 0.5 + Math.random() * 0.6,
-        color, kick: KICK_LIFE,
+        sign: spin, strength: 0.5 + Math.random() * 0.6,
+        color, kick: S.kickLife, life: S.kickLife,
       });
     }
   }
@@ -617,6 +755,8 @@ class App {
         { binding: 3, resource: (b ?? this.dummy).cube },
         { binding: 4, resource: dst.store },
         { binding: 5, resource: { buffer: buf } },
+        { binding: 6, resource: (a ?? this.dummy).store },
+        { binding: 7, resource: (b ?? this.dummy).store },
       ],
     });
   }
@@ -646,7 +786,7 @@ class App {
   private step(enc: GPUCommandEncoder) {
     const pass = enc.beginComputePass();
     let flowSrc: CubeField;
-    if (S.flow === 'fluid') {
+    if (this.flowMode() === 'fluid') {
       // 1. Advektion  2. Wirbelstärke  3. Breitenkreis-Mittel  4. Kräfte  5. Divergenz  6. Druck  7. Projektion
       this.run2D(pass, 'advect', this.vel[this.vc], null, this.vel[1 - this.vc]); this.vc = 1 - this.vc;
       this.run2D(pass, 'curl', this.vel[this.vc], null, this.aux);
@@ -666,7 +806,8 @@ class App {
       flowSrc = this.flow;
     }
 
-    if (S.look === 'dye') {
+    const look = this.lookMode();
+    if (look === 'dye') {
       this.run2D(pass, 'advectDye', this.dye[this.dc], flowSrc, this.dye[1 - this.dc]); this.dc = 1 - this.dc;
       pass.end();
     } else {
@@ -678,7 +819,7 @@ class App {
       p2.setBindGroup(0, this.bind(cur, flowSrc, nxt, this.parts));
       const groups = Math.ceil(S.particles / 64);
       p2.dispatchWorkgroups(Math.min(groups, 65535), Math.ceil(groups / 65535));
-      this.run2D(p2, 'blurRelax', nxt, null, cur);
+      this.run2D(p2, look === 'pure' ? 'blurFade' : 'blurRelax', nxt, null, cur);
       p2.end();
     }
     return flowSrc;
@@ -687,6 +828,171 @@ class App {
   // ---------- Hauptschleife ----------
 
   private last = performance.now();
+  private grab: (() => Promise<void>) | null = null;
+  private fpsNow = 0;
+
+  frameCount() { return this.frame; }
+
+  /** Das nächste gezeichnete Bild als Canvas (Testmodus: aus der Offscreen-Textur). */
+  private grabFrame(): Promise<HTMLCanvasElement> {
+    return new Promise((resolve) => {
+      this.grab = async () => {
+        const c = document.createElement('canvas');
+        c.width = canvas.width; c.height = canvas.height;
+        const g = c.getContext('2d')!;
+        if (this.offscreen) {
+          const url = await this.capture();
+          const img = new Image();
+          img.src = url;
+          await img.decode();
+          g.drawImage(img, 0, 0);
+        } else {
+          // Direkt nach dem Zeichnen im selben Task ist der WebGPU-Canvas noch lesbar.
+          g.drawImage(canvas, 0, 0);
+        }
+        resolve(c);
+      };
+    });
+  }
+
+  /**
+   * Filmstreifen: mehrere Bilder im Abstand nebeneinander, dazu einfache Messwerte.
+   * detail = mittlere |Laplace| der Helligkeit (Feinstruktur), change = mittlere Änderung zum
+   * vorigen Bild (Bewegung). Damit lassen sich Bewegung und Schärfe vergleichen, ohne dass
+   * jemand Einzelbilder beschreiben muss.
+   */
+  async filmstrip(o: FilmOptions = {}): Promise<Filmstrip> {
+    const frames = o.frames ?? 8, cols = o.cols ?? 4, scale = o.scale ?? 0.5;
+    const shots: HTMLCanvasElement[] = [];
+    const stats: { t: number; frame: number; fps: number; detail: number; change: number }[] = [];
+    let prev: Uint8ClampedArray | null = null;
+    let w = 0, h = 0;   // Zellgröße aus dem ersten Bild, auch wenn sich die Render-Auflösung ändert
+    for (let k = 0; k < frames; k++) {
+      if (k > 0) {
+        if (o.everySteps) { const target = this.frame + o.everySteps; while (this.frame < target) await new Promise((r) => setTimeout(r, 30)); }
+        else await new Promise((r) => setTimeout(r, (o.everySeconds ?? 2) * 1000));
+      }
+      const c = await this.grabFrame();
+      if (!w) { w = Math.max(1, Math.round(c.width * scale)); h = Math.max(1, Math.round(c.height * scale)); }
+      const small = document.createElement('canvas');
+      small.width = w; small.height = h;
+      const g = small.getContext('2d', { willReadFrequently: true })!;
+      g.drawImage(c, 0, 0, w, h);
+      const px = g.getImageData(0, 0, w, h).data;
+      const L = (i: number) => 0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2];
+      let lap = 0, cnt = 0, diff = 0;
+      for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+        const i = (y * w + x) * 4;
+        const v = L(i);
+        if (v < 8) continue;               // Weltraum nicht mitzählen
+        lap += Math.abs(4 * v - L(i - 4) - L(i + 4) - L(i - w * 4) - L(i + w * 4));
+        if (prev) diff += Math.abs(v - (0.3 * prev[i] + 0.59 * prev[i + 1] + 0.11 * prev[i + 2]));
+        cnt++;
+      }
+      prev = new Uint8ClampedArray(px);
+      stats.push({ t: +this.time.toFixed(2), frame: this.frame, fps: this.fpsNow, detail: +(lap / Math.max(cnt, 1)).toFixed(3), change: +(diff / Math.max(cnt, 1)).toFixed(3) });
+      shots.push(small);
+    }
+    // Kontaktbogen mit Beschriftung
+    const rows = Math.ceil(frames / cols), foot = 54;
+    const sheet = document.createElement('canvas');
+    sheet.width = w * cols; sheet.height = h * rows + foot;
+    const g = sheet.getContext('2d')!;
+    g.fillStyle = '#000'; g.fillRect(0, 0, sheet.width, sheet.height);
+    g.font = '13px monospace';
+    shots.forEach((c, k) => {
+      const x = (k % cols) * w, y = Math.floor(k / cols) * h;
+      g.drawImage(c, x, y);
+      g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(x, y, 230, 20);
+      g.fillStyle = '#eee';
+      g.fillText(`t=${stats[k].t}s  detail ${stats[k].detail}  Δ ${stats[k].change}`, x + 5, y + 14);
+    });
+    g.fillStyle = '#ccc';
+    const line1 = `${this.preset.name} · ${S.flow}+${S.look} · ${S.quality} · ${S.velRes}²/${S.dyeRes}² · ${S.particles} ${t('Partikel', 'particles')} · ${this.fpsNow} fps · ${t('Zeitraffer', 'time lapse')} ${S.timeScale}×`;
+    const line2 = `jet ${S.jetStrength} · Ω ${S.omega}${S.retro ? ' retro' : ''} · conf ${S.confinement} · turb ${S.turbulence} · bandRelax ${S.bandRelax} · spawn ${S.stormSpawn}/${S.kickLife}s · relief ${S.relief} · v0.3.0`;
+    g.fillText(line1, 8, h * rows + 20);
+    g.fillText(line2, 8, h * rows + 42);
+    return { image: sheet.toDataURL('image/png'), stats };
+  }
+
+  private async recordFilmstrip() {
+    const msg = (x: string) => { const el = document.getElementById('diag-msg'); if (el) el.textContent = x; };
+    const btn = document.getElementById('btn-film') as HTMLButtonElement | null;
+    if (btn) btn.disabled = true;
+    msg(t('Nehme 8 Bilder in 14 s auf …', 'Recording 8 frames over 14 s …'));
+    try {
+      const f = await this.filmstrip({ frames: 8, everySeconds: 2 });
+      const a = document.createElement('a');
+      a.href = f.image;
+      a.download = `procedural-planets-${this.preset.name.replace(/[^\w-]+/g, '-')}-${Date.now()}.png`;
+      a.click();
+      msg(t('Gespeichert. Das PNG enthält die wichtigsten Einstellungen in der Fußzeile.', 'Saved. The PNG lists the key settings in its footer.'));
+    } catch (e) {
+      msg(`${t('Aufnahme fehlgeschlagen:', 'Recording failed:')} ${e instanceof Error ? e.message : String(e)}`);
+    }
+    if (btn) btn.disabled = false;
+  }
+
+  /**
+   * Misst, ob die Cubemap-Abtastung der Grafikkarte an Würfelkanten nahtlos ist: ein glattes
+   * Testfeld wird geschrieben und zwischen den Texelzentren wieder abgetastet.
+   */
+  async selftest(): Promise<{ edge: number; interior: number; seamless: boolean }> {
+    const d = this.device, n = 256;
+    const common = commonWGSL.slice(0, commonWGSL.indexOf('// Richtung -> (st in [0,1]²'));
+    const fld = 'fn fld(p: vec3f) -> f32 { return sin(p.x * 9.0) * 0.5 + p.y * 0.3; }';
+    const strip = common.replace(/@group\(0\) @binding\(0\) var<uniform> S: Sim;/, '');
+    const tex = d.createTexture({ size: [n, n, 6], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING });
+    const fill = d.createComputePipeline({ layout: 'auto', compute: { entryPoint: 'main', module: d.createShaderModule({ code: strip + fld + `
+      @group(0) @binding(0) var dst: texture_storage_2d_array<rgba16float, write>;
+      @compute @workgroup_size(8, 8, 1) fn main(@builtin(global_invocation_id) id: vec3u) {
+        textureStore(dst, id.xy, id.z, vec4f(fld(faceDir(id.z, (vec2f(id.xy) + 0.5) / ${n}.0)), 0.0, 0.0, 1.0));
+      }` }) } });
+    const test = d.createComputePipeline({ layout: 'auto', compute: { entryPoint: 'main', module: d.createShaderModule({ code: strip + fld + `
+      @group(0) @binding(0) var t: texture_cube<f32>;
+      @group(0) @binding(1) var s: sampler;
+      @group(0) @binding(2) var<storage, read_write> o: array<atomic<u32>, 4>;
+      @compute @workgroup_size(8, 8, 1) fn main(@builtin(global_invocation_id) id: vec3u) {
+        let st = (vec2f(id.xy) + vec2f(0.37, 0.61)) / ${n}.0;
+        let p = faceDir(id.z, st);
+        let e = u32(abs(textureSampleLevel(t, s, p, 0.0).r - fld(p)) * 1e6);
+        if (min(min(st.x, 1.0 - st.x), min(st.y, 1.0 - st.y)) * ${n}.0 < 1.5) { atomicMax(&o[0], e); } else { atomicMax(&o[1], e); }
+      }` }) } });
+    const out = d.createBuffer({ size: 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+    const rd = d.createBuffer({ size: 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    const e = d.createCommandEncoder();
+    const ps = e.beginComputePass();
+    ps.setPipeline(fill);
+    ps.setBindGroup(0, d.createBindGroup({ layout: fill.getBindGroupLayout(0), entries: [{ binding: 0, resource: tex.createView({ dimension: '2d-array' }) }] }));
+    ps.dispatchWorkgroups(n / 8, n / 8, 6);
+    ps.setPipeline(test);
+    ps.setBindGroup(0, d.createBindGroup({ layout: test.getBindGroupLayout(0), entries: [
+      { binding: 0, resource: tex.createView({ dimension: 'cube' }) },
+      { binding: 1, resource: d.createSampler({ magFilter: 'linear', minFilter: 'linear' }) },
+      { binding: 2, resource: { buffer: out } }] }));
+    ps.dispatchWorkgroups(n / 8, n / 8, 6);
+    ps.end();
+    e.copyBufferToBuffer(out, 0, rd, 0, 16);
+    d.queue.submit([e.finish()]);
+    await rd.mapAsync(GPUMapMode.READ);
+    const r = new Uint32Array(rd.getMappedRange().slice(0));
+    rd.destroy(); out.destroy(); tex.destroy();
+    const edge = r[0] / 1e6, interior = r[1] / 1e6;
+    // Bilineare Interpolation hat an Kanten natürlicherweise etwas mehr Fehler (gekrümmte Fläche);
+    // eine echte Naht liegt um Größenordnungen darüber (SwiftShader: 0,139 gegen 0,0003).
+    return { edge, interior, seamless: edge < Math.max(0.01, interior * 20) };
+  }
+
+  private async runSelftest() {
+    const el = document.getElementById('diag-msg');
+    const r = await this.selftest();
+    if (!r.seamless && !S.seamless) { S.seamless = true; this.buildPipes(true); this.panel.refresh(); this.remember(); }
+    if (el) el.textContent = r.seamless
+      ? t(`Nahtlos: Fehler an Kanten ${r.edge.toFixed(4)}, innen ${r.interior.toFixed(4)}. „Exakte Kanten“ ist nicht nötig. Sichtbare Übergänge kommen dann nicht von der Abtastung (siehe docs/STATUS.md).`,
+        `Seamless: error at edges ${r.edge.toFixed(4)}, inside ${r.interior.toFixed(4)}. “Exact edges” is not needed. Visible transitions then do not come from sampling (see docs/STATUS.md).`)
+      : t(`Naht gefunden: Fehler an Kanten ${r.edge.toFixed(4)}, innen ${r.interior.toFixed(4)}. „Exakte Kanten“ ist jetzt an.`,
+        `Seam found: error at edges ${r.edge.toFixed(4)}, inside ${r.interior.toFixed(4)}. “Exact edges” is now on.`);
+  }
   private fpsAcc = 0; private fpsFrames = 0;
 
   run() {
@@ -700,11 +1006,15 @@ class App {
       } else {
         this.fpsAcc += real; this.fpsFrames++;
         if (this.fpsAcc > 0.5) {
-          fpsEl.textContent = `${Math.round(this.fpsFrames / this.fpsAcc)} fps`;
+          const lapse = S.timeScale !== 1 ? ` · ${t('Zeitraffer', 'time lapse')} ${this.achieved.toFixed(1)}×` : '';
+          this.fpsNow = Math.round(this.fpsFrames / this.fpsAcc);
+          fpsEl.textContent = `${this.fpsNow} fps${lapse}`;
           this.fpsAcc = 0; this.fpsFrames = 0;
         }
         this.frameOnce(real);
         this.adaptScale(real);
+        // Filmstreifen: das eben gezeichnete Bild abgreifen, solange es noch gültig ist.
+        if (this.grab) { const g = this.grab; this.grab = null; await g(); }
         // Im Testmodus bremst kein Canvas die Bildrate, also auf die GPU warten.
         if (this.offscreen) await this.device.queue.onSubmittedWorkDone();
       }
@@ -721,10 +1031,10 @@ class App {
     this.initFields(init, this.needsInit);
     this.device.queue.submit([init.finish()]);
     // Neue Farbe braucht etwas Zeit, bis die Strömung sie verwirbelt hat.
-    this.warm = this.needsInit ? WARM_STEPS : Math.max(this.warm, 300);
+    this.warm = this.needsInit ? this.warmSteps : Math.max(this.warm, Math.min(300, this.warmSteps));
     this.warmTotal = this.warm;
     this.warmStart = performance.now();
-    if (this.needsInit) this.calibrated = false;
+    this.manualSkip = false;
     this.needsInit = false;
     this.needsDye = false;
     showLoading(true);
@@ -738,17 +1048,17 @@ class App {
     await this.device.queue.onSubmittedWorkDone();
     const ms = (performance.now() - t0) / Math.max(n, 1);
     this.stepMs = this.stepMs > 0 ? this.stepMs * 0.7 + ms * 0.3 : ms;
-    this.warmRate = Math.min(128, Math.max(1, Math.round(40 / this.stepMs)));
+    this.warmRate = Math.min(1024, Math.max(1, Math.round(40 / this.stepMs)));
     const done = this.warmTotal - this.warm;
     if (S.autoQuality && !this.calibrated && done >= 90) this.calibrate();
     // Ladezeit begrenzen: nicht länger als ~5 s vorrechnen, auch auf langsamen GPUs.
-    if (done >= 90 && !this.offscreen) {
+    if (done >= 90 && !this.offscreen && !this.manualSkip) {
       const left = Math.max(0, Math.floor((MAX_LOAD_MS - (performance.now() - this.warmStart)) / this.stepMs));
       if (this.warm > left) { this.warm = left; this.warmTotal = done + left; }
     }
     loadBar.style.width = `${Math.round((100 * (this.warmTotal - this.warm)) / Math.max(this.warmTotal, 1))}%`;
     fpsEl.textContent = '– fps';
-    if (this.warm === 0) showLoading(false);
+    if (this.warm === 0) { showLoading(false); this.manualSkip = false; }
   }
 
   /** Einmal pro Start: passt ein Simulationsschritt nicht ins Budget, eine Stufe herunter. */
@@ -777,11 +1087,15 @@ class App {
     else if (++this.goodSeconds >= 3 && this.renderScale < 1) { this.renderScale = Math.min(1, this.renderScale + 0.05); this.goodSeconds = 0; }
   }
 
+  /** Schrittweite: bei Tempo < 1 kleinere Schritte (flüssig, gleiche Physik), sonst fest 1/60 s. */
+  private dtStep(): number { return this.warm > 0 ? DT : DT * Math.min(1, S.timeScale); }
+
   private simStep(enc: GPUCommandEncoder): CubeField {
-    this.time += DT;
+    const dt = this.dtStep();
+    this.time += dt;
     this.frame++;
-    this.updateStorms(DT);
-    this.writeSim(DT);
+    this.updateStorms(dt);
+    this.writeSim(dt);
     return this.step(enc);
   }
 
@@ -796,15 +1110,23 @@ class App {
   /** Ein Bild: Simulationsschritt(e) und Darstellung. */
   frameOnce(real: number) {
     this.initIfNeeded();
-    let flowSrc = S.flow === 'fluid' ? this.vel[this.vc] : this.flow;
+    let flowSrc = this.flowMode() === 'fluid' ? this.vel[this.vc] : this.flow;
+    let n = 0;
     if (!S.paused) {
-      // Zeitraffer: mehr Schritte pro Bild, jeder Schritt bleibt gleich groß (gleiche Physik).
-      this.stepAcc += S.timeScale;
-      const n = Math.min(Math.floor(this.stepAcc), 8);
-      this.stepAcc -= n;
+      // Die Simulation läuft in Echtzeit: 60 Schritte pro Sekunde mal Zeitraffer, unabhängig von
+      // der Bildrate (bis v0.2.3 war es ein Schritt pro Bild, bei 240 fps lief alles viermal so
+      // schnell). Jeder Schritt ist gleich groß, der Zeitraffer ändert also nicht die Physik,
+      // sondern nur, wie viel Simulationszeit pro Sekunde vergeht. Im Testmodus: fester Takt.
+      this.stepAcc += this.offscreen ? Math.max(1, S.timeScale) : real * 60 * Math.max(1, S.timeScale);
+      // Obergrenze aus der gemessenen Schrittzeit, damit das Bild flüssig bleibt.
+      const cap = Math.max(1, Math.min(64, Math.floor(12 / Math.max(this.stepMs, 0.1))));
+      n = Math.min(Math.floor(this.stepAcc), cap);
+      this.stepAcc = Math.min(this.stepAcc - n, 2);
       for (let k = 0; k < n; k++) flowSrc = this.submitStep();
     }
-    this.spin += S.paused ? 0 : real * 0.08 * S.spinSpeed * (9.93 / this.preset.rotationHours);
+    this.achieved = this.achieved * 0.97 + (real > 0 ? (n * this.dtStep() / real) : 0) * 0.03;
+    // Sichtbare Drehung in Simulationszeit: Zeitraffer beschleunigt Wolken und Drehung gleich.
+    this.spin += n * this.dtStep() * 0.08 * S.spinSpeed * (9.93 / this.preset.rotationHours) * this.dir();
     const enc = this.device.createCommandEncoder();
     this.writeRender();
 
@@ -879,7 +1201,8 @@ class App {
   }
 
   private resize() {
-    const dpr = Math.min(devicePixelRatio || 1, this.dpr) * (S.autoQuality ? this.renderScale : 1);
+    // Pixeldichte direkt aus dem Regler: über der Bildschirmdichte = Supersampling (schärfer, teurer).
+    const dpr = this.dpr * (S.autoQuality ? this.renderScale : 1);
     const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
     const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
@@ -921,8 +1244,12 @@ class App {
     const pct = (v: number) => `${Math.round(v * 100)} %`;
     const f2 = (v: number) => v.toFixed(2);
     const f3 = (v: number) => v.toFixed(3);
-    const n = (v: number) => (v >= 1e6 ? `${(v / 1e6).toFixed(v % 1e6 ? 2 : 0)} ${t('Mio.', 'M')}` : v >= 1e3 ? `${Math.round(v / 1024)} k` : String(v));
+    const n = (v: number) => (v >= 1e6 ? `${(v / 1048576).toFixed(v % 1048576 ? 2 : 0)} ${t('Mio.', 'M')}` : v >= 1e3 ? `${Math.round(v / 1024)} k` : String(v));
+    // Formel unter dem Erklärtext: was im Code wirklich gerechnet wird.
+    const fx = (f: string) => `<code class="fx">${f}</code>`;
     const presetName = (name: string) => ({ Neptun: t('Neptun', 'Neptune'), 'Heißer Jupiter': t('Heißer Jupiter', 'Hot Jupiter') } as Record<string, string>)[name] ?? name;
+    // Alle Regler gehen immer bis zum Maximum; "Gerät" setzt nur die Startwerte.
+    const lim = QUALITY.ultra.max;
 
     this.panel = new Panel(root, S as unknown as Record<string, number | string | boolean>, on, DEFAULTS as unknown as Record<string, number | string | boolean>);
     this.panel
@@ -930,12 +1257,6 @@ class App {
       .select('preset', t('Vorlage', 'Preset'), [...presets.map((p) => [p.name, presetName(p.name)] as [string, string]), ['Zufall', t('Zufallsplanet', 'Random planet')]],
         t('Lädt Windprofil, Farbbänder, Stürme, Abplattung und Ringe eines Planeten. Alles sind Zahlen, keine Bilder.',
           'Loads a planet’s wind profile, colour bands, storms, oblateness and rings. All numbers, no images.'))
-      .select('quality', t('Qualität', 'Quality'), [['phone', t('Handy', 'Phone')], ['standard', 'Standard'], ['high', t('Hoch (4 Mio. Partikel)', 'High (4 M particles)')]],
-        t('Setzt Gitterauflösung, Farbauflösung, Partikelzahl und Pixeldichte auf einmal. „Handy“ ist für Smartphones gedacht.',
-          'Sets grid resolution, colour resolution, particle count and pixel density at once. “Phone” is meant for smartphones.'))
-      .toggle('autoQuality', t('60 fps halten', 'Hold 60 fps'),
-        t('Misst beim Laden, wie schnell deine Grafikkarte einen Simulationsschritt rechnet, und senkt bei Bedarf die Auflösung. Danach passt sich die Render-Auflösung laufend an, damit die Bildrate über 58 fps bleibt.',
-          'Measures during loading how fast your GPU computes a simulation step and lowers the resolution if needed. Afterwards the render resolution adapts continuously to keep the frame rate above 58 fps.'))
       .file('image', t('Farben aus Bild', 'Colours from image'),
         t('Lade ein Planetenfoto oder eine flache Karte. Für jeden Breitengrad wird die mittlere Farbe gemessen und als Bandfarbe übernommen. Das Bild wird nicht als Textur benutzt, die Wolken entstehen weiter aus der Simulation.',
           'Load a planet photo or a flat map. The average colour of each latitude becomes that band’s colour. The image is not used as a texture; the clouds still come from the simulation.'),
@@ -944,122 +1265,204 @@ class App {
           this.writeTables();
           this.needsDye = true;
           this.remember();
-          const info = document.getElementById('planet-info');
-          if (info) info.textContent = `${this.preset.name} · ${t('Farben aus', 'colours from')} ${f.name}`;
+          this.updateInfo();
         }).catch(() => fail(t('<b>Das Bild ließ sich nicht lesen.</b> Nimm ein JPG, PNG oder WebP.', '<b>Could not read the image.</b> Use a JPG, PNG or WebP.'))))
       .buttons([
-        ['btn-reset', t('Neu starten', 'Restart'), () => { this.needsInit = true; }],
-        ['btn-warm', t('Einschwingen', 'Spin up'), () => { this.warm = WARM_STEPS; this.warmTotal = WARM_STEPS; showLoading(true); }],
         ['btn-defaults', t('Regler zurücksetzen', 'Reset controls'), () => this.resetSettings()],
-        ['btn-seed', t('🎲 Zufallsplanet', '🎲 Random planet'), () => { S.preset = 'Zufall'; S.seed = newSeed(); this.applyPreset(); this.remember(); }],
-        ['btn-pause', S.paused ? t('Weiter', 'Resume') : 'Pause', () => { S.paused = !S.paused; (document.getElementById('btn-pause') as HTMLButtonElement).textContent = S.paused ? t('Weiter', 'Resume') : 'Pause'; }],
+      ], {
+        'btn-defaults': t('Alle Regler auf die Standardwerte, Planet und Gerät bleiben.', 'All controls back to defaults; planet and device stay.'),
+      })
+      .section(t('Zufallsplanet', 'Random planet'), t('Würfelt einen neuen Planeten. Mit den Vorgaben lenkst du den Zufall; „egal“ lässt ihn frei. Gleicher Seed und gleiche Vorgaben ergeben immer denselben Planeten.',
+        'Rolls a new planet. The options steer the dice; “any” leaves them free. Same seed and same options always give the same planet.'), S.preset === 'Zufall')
+      .select('rndFamily', t('Familie', 'Family'), [['', t('egal', 'any')], ['jovian', t('jupiterartig', 'Jupiter-like')], ['saturnian', t('saturnartig', 'Saturn-like')], ['ice', t('Eisriese', 'ice giant')], ['hot', t('heißer Jupiter', 'hot Jupiter')], ['exotic', t('exotisch', 'exotic')]],
+        t('Bestimmt Farbraum, Bandzahl, Stärke des Äquatorjets und Stimmung.', 'Sets colour range, band count, equatorial jet strength and mood.'))
+      .range('rndBands', t('Bänder', 'Bands'), 0, 30, 1,
+        t('Anzahl der Farbbänder und Jets. 0 = würfeln. Physikalisch hängt sie von Rotation, Größe und Windstärke ab (Rhines-Skala).',
+          'Number of colour bands and jets. 0 = roll. Physically it depends on rotation, size and wind speed (Rhines scale).') + fx('L<sub>β</sub> = π·√(2U/β),  β = 2Ω·cos φ / R'), (v) => (v === 0 ? t('Zufall', 'roll') : String(v)))
+      .select('rndStorms', t('Stürme', 'Storms'), [['auto', t('egal', 'any')], ['none', t('keine', 'none')], ['few', t('wenige', 'few')], ['many', t('viele', 'many')]],
+        t('Wie viele Stürme die Vorlage mitbringt. Neue entstehen zusätzlich über „Neue Stürme“.', 'How many storms the preset brings. More can form via “New storms”.'))
+      .select('rndRings', t('Ringe', 'Rings'), [['auto', t('egal', 'any')], ['yes', t('ja', 'yes')], ['no', t('nein', 'no')]], t('Ringe erzwingen oder verbieten.', 'Force or forbid rings.'))
+      .buttons([
+        ['btn-seed', t('🎲 Neuer Zufallsplanet', '🎲 New random planet'), () => { S.preset = 'Zufall'; S.seed = newSeed(); this.applyPreset(); this.panel.refresh(); this.remember(); }],
       ])
-      .section(t('Verfahren', 'Method'), t('Strömung bestimmt, woher der Wind kommt. Darstellung bestimmt, wie die Wolken ihm folgen. Alle vier Kombinationen laufen.',
-        'Flow decides where the wind comes from. Look decides how the clouds follow it. All four combinations work.'))
-      .select('flow', t('Strömung', 'Flow'), [['fluid', 'Stable Fluids (mofu)'], ['curl', 'Curl noise (jasper-r)']],
-        t('Stable Fluids löst die Strömungsgleichung mit Druck, Coriolis und Wirbeln (physikalisch). Curl-Noise ist ein verwirbeltes Rauschfeld plus Jets (schnell, aber ohne Physik).',
-          'Stable Fluids solves the flow equations with pressure, Coriolis and vortices (physical). Curl noise is a swirling noise field plus jets (fast, but no physics).'))
-      .select('look', t('Darstellung', 'Look'), [['dye', t('Farbstoff', 'Dye')], ['particles', t('Partikel', 'Particles')]],
-        t('Farbstoff: jede Zelle der Farbtextur wird mit dem Wind verschoben. Partikel: Millionen Punkte fliegen mit dem Wind und färben die Textur, die langsam verblasst.',
-          'Dye: every cell of the colour texture is carried by the wind. Particles: millions of points ride the wind and paint the texture, which slowly fades.'))
-      .range('timeScale', t('Zeitraffer', 'Time lapse'), 0.25, 8, 0.25,
-        t('Simulationsschritte pro Bild. Jeder Schritt ist gleich groß, die Physik bleibt also dieselbe, sie läuft nur schneller ab. Kostet entsprechend mehr Rechenleistung. Zum schnellen Erreichen des stabilen Zustands gibt es den Knopf „Einschwingen“.',
-          'Simulation steps per frame. Every step has the same size, so the physics stay the same and just run faster. Costs more GPU time. To reach a settled state quickly, use “Spin up”.'), (v) => `${v.toFixed(2)}×`)
-      .section(t('Wind und Physik', 'Wind and physics'), t('Wirkt bei Strömung „Stable Fluids“. Jet-Stärke wirkt überall.', 'Applies to the “Stable Fluids” flow. Jet strength applies everywhere.'))
-      .range('jetStrength', t('Jet-Stärke', 'Jet strength'), 0, 0.2, 0.002,
-        t('Spitzengeschwindigkeit der Ost-West-Winde in Radiant pro Sekunde. Bei Jupiter wären das echte 150 m/s. Skaliert auch Stürme und Turbulenz.',
-          'Peak east–west wind speed in radians per second (on Jupiter the real value is 150 m/s). Also scales storms and turbulence.'), f3)
-      .range('jetRelax', t('Jet-Rückstellung', 'Jet restoring'), 0, 2, 0.01,
-        t('Wie stark das Breitenkreis-Mittel der Ost-West-Winde zum gemessenen Windprofil zurückgezogen wird. Wirbel bleiben unberührt. 0 = die Strömung ist frei und die Bänder zerfallen mit der Zeit.',
-          'How strongly the latitude-circle mean of the east–west wind is pulled back to the measured profile. Vortices are left alone. 0 = free flow, bands decay over time.'), f2)
-      .range('omega', t('Coriolis (Rotation)', 'Coriolis (rotation)'), 0, 3, 0.01,
-        t('Physikalische Planetenrotation in der Strömungsgleichung. Lenkt Winde ab (Nordhalbkugel nach rechts) und erzeugt über den β-Effekt Rossby-Wellen und langlebige Wirbel. 0 = nicht rotierender Planet. Die sichtbare Drehung stellst du unter „Drehgeschwindigkeit“ ein.',
-          'Physical planet rotation in the flow equations. Deflects winds (to the right in the north) and, through the β-effect, creates Rossby waves and long-lived vortices. 0 = non-rotating planet. The visible spin is set under “Spin speed”.'), f2)
-      .range('turbulence', t('Turbulenz', 'Turbulence'), 0, 3, 0.01,
-        t('Kleine zufällige Anstöße im Wind. Sie lösen die Scherinstabilitäten an den Jet-Rändern aus (Kelvin-Helmholtz-Wellen).',
-          'Small random kicks in the wind. They trigger shear instabilities at jet edges (Kelvin–Helmholtz waves).'), f2)
-      .range('turbScale', t('Turbulenz-Größe', 'Turbulence scale'), 1, 20, 0.5,
-        t('Größe der Anstöße: klein = viele feine Wirbel, groß = wenige große.', 'Size of the kicks: small = many fine eddies, large = a few big ones.'), (v) => v.toFixed(1))
-      .range('confinement', t('Wirbelverstärkung', 'Vorticity confinement'), 0, 8, 0.05,
-        t('Vorticity Confinement: gibt Wirbeln die Energie zurück, die das grobe Gitter wegschmiert. Wirkt vor allem auf die kleinsten Wirbel. Standard 6 ist der lebendige Look von v0.1; physikalisch sauberer ist etwa 0,5, das beruhigt das kleinskalige Rauschen.',
-          'Gives vortices back the energy the coarse grid smears away, mostly for the smallest eddies. Default 6 is the v0.1 look with lively curls; physically cleaner is about 0.5, which calms the small-scale noise.'), f2)
-      .range('drag', t('Reibung', 'Drag'), 0, 0.5, 0.005, t('Bremst den ganzen Wind gleichmäßig ab.', 'Slows the whole wind field uniformly.'), f3)
-      .range('iterations', t('Druck-Iterationen', 'Pressure iterations'), 2, 80, 1,
-        t('Jacobi-Schritte für die Druckgleichung. Mehr = sauberer divergenzfrei, aber teurer. Der wichtigste Leistungsregler.',
-          'Jacobi steps for the pressure equation. More = closer to divergence-free, but slower. The most important performance control.'))
-      .range('velRes', t('Gitter je Würfelfläche', 'Grid per cube face'), 32, 256, 16,
-        t('Auflösung des Windgitters. 128 heißt 6 × 128 × 128 Zellen auf der Kugel.', 'Wind grid resolution. 128 means 6 × 128 × 128 cells on the sphere.'), (v) => `${v}²`)
-      .toggle('bfecc', t('BFECC-Advektion', 'BFECC advection'),
-        t('Fehlerkorrektur beim Mitführen (vor, zurück, halben Fehler abziehen). Macht Wirbel und Farbkanten schärfer, kostet zwei zusätzliche Abtastungen.',
-          'Error correction during transport (back, forth, subtract half the error). Sharper vortices and colour edges for two extra samples.'))
-      .section('Curl noise', t('Wirkt bei Strömung „Curl-Noise“.', 'Applies to the “Curl noise” flow.'), false)
-      .range('curlStrength', t('Stärke', 'Strength'), 0, 3, 0.01, t('Wie stark das Rauschfeld gegenüber den Jets ist.', 'Strength of the noise field relative to the jets.'), f2)
-      .range('curlFreq', t('Frequenz', 'Frequency'), 1, 16, 0.1, t('Größe der Wirbel im Rauschfeld: hoch = viele kleine.', 'Size of the swirls in the noise: high = many small ones.'), (v) => v.toFixed(1))
-      .range('curlSpeed', t('Veränderung', 'Evolution'), 0, 0.5, 0.005, t('Wie schnell sich das Rauschfeld mit der Zeit umbaut.', 'How fast the noise field changes over time.'), f3)
-      .range('curlOctaves', t('Oktaven', 'Octaves'), 1, 6, 1, t('Anzahl überlagerter Rausch-Ebenen. Mehr = feinere Details.', 'Number of stacked noise layers. More = finer detail.'))
-      .range('vortexCount', t('Wirbel', 'Vortices'), 0, 128, 1,
-        t('Anzahl eingestreuter Wirbel (Rezept aus Gaseous Giganticus). Sie werden nur dort gesetzt, wo die Jets schwach sind, und drehen mit der lokalen Scherung, damit sie nicht zerrissen werden.',
-          'Number of seeded vortices (Gaseous Giganticus recipe). Placed only where jets are weak, spinning with the local shear so they are not torn apart.'))
-      .range('vortexStrength', t('Wirbel-Stärke', 'Vortex strength'), 0, 4, 0.05, t('Drehgeschwindigkeit der eingestreuten Wirbel relativ zur Jet-Stärke.', 'Spin of the seeded vortices relative to jet strength.'), f2)
-      .range('curlRes', t('Feinheit Strömungsfeld', 'Flow field resolution'), 64, 1024, 64,
-        t('Auflösung des Curl-Noise-Strömungsfelds je Würfelfläche. Gaseous Giganticus nutzt 2048. Feiner = feinere Filamente, kostet Rechenzeit.',
-          'Resolution of the curl noise flow field per cube face. Gaseous Giganticus uses 2048. Finer = finer filaments, more GPU time.'), (v) => `${v}²`)
-      .section(t('Partikel', 'Particles'), t('Wirkt bei Darstellung „Partikel“.', 'Applies to the “Particles” look.'), false)
-      .range('particles', t('Anzahl', 'Count'), 16384, 4194304, 16384,
-        t('Anzahl der Partikel. jasper-r nutzte 4 Mio. bei 80 fps auf einem PC. Handys schaffen etwa 0,25 bis 1 Mio.', 'Number of particles. jasper-r used 4 M at 80 fps on a PC. Phones manage roughly 0.25 to 1 M.'), n)
-      .range('lifetime', t('Lebensdauer', 'Lifetime'), 0.5, 60, 0.5,
-        t('Sekunden, bis ein Partikel neu geboren wird. Lang = lange Schlieren. Ganz rechts (60) leben Partikel ewig wie bei Gaseous Giganticus und ziehen immer feinere Fäden.',
-          'Seconds until a particle respawns. Long = long streaks. At the far right (60) particles live forever, as in Gaseous Giganticus, and draw ever finer threads.'), (v) => (v >= 60 ? t('ewig', 'forever') : `${v.toFixed(1)} s`))
-      .range('opacity', t('Deckkraft', 'Opacity'), 0.01, 1, 0.01, t('Wie stark ein Partikel seine Farbe in die Textur schreibt.', 'How strongly a particle writes its colour into the texture.'), pct)
-      .range('blur', t('Weichzeichnen', 'Blur'), 0, 1, 0.01, t('Verwischt die Textur jedes Bild ein wenig, damit aus Punkten Wolken werden.', 'Blurs the texture slightly every frame so points become clouds.'), pct)
-      .section(t('Wolken und Stürme', 'Clouds and storms'))
-      .range('bandRelax', t('Band-Rückstellung', 'Band restoring'), 0, 0.5, 0.005,
-        t('Wie schnell die Farbe zum Band ihrer Breite zurückkehrt. 0 = alles vermischt sich irgendwann zu Brei, hoch = starre Streifen.',
-          'How fast colour returns to its latitude’s band. 0 = everything eventually mixes into mush, high = rigid stripes.'), f3)
-      .range('fineStripes', t('Feinstreifen', 'Fine stripes'), 0, 2, 0.05,
-        t('Feine Farbstreifen innerhalb der Bänder. Erst sie machen sichtbar, wie die Strömung Farbe zu Filamenten zieht, wie auf den Juno-Nahaufnahmen.',
-          'Fine colour stripes inside the bands. They make it visible how the flow pulls colour into filaments, as in Juno close-ups.'), f2)
-      .range('bandWobble', t('Band-Mäander', 'Band meander'), 0, 3, 0.05, t('Verbiegt die Bandgrenzen mit Rauschen, damit sie nicht wie mit dem Lineal gezogen sind.', 'Bends band edges with noise so they are not ruler-straight.'), f2)
-      .range('contrast', t('Band-Kontrast', 'Band contrast'), 0, 2.5, 0.05, t('Verstärkt oder dämpft den Farbunterschied zwischen hellen Zonen und dunklen Gürteln.', 'Raises or lowers the colour difference between bright zones and dark belts.'), f2)
-      .range('convection', t('Konvektion', 'Convection'), 0, 4, 0.05, t('Helle Wolkentürme, die aus der Tiefe aufsteigen (Ammoniak-Eis).', 'Bright cloud towers rising from below (ammonia ice).'), f2)
+      .section(t('Verfahren', 'Method'), t('Rechenmodell und Darstellung sind frei kombinierbar.', 'Maths model and look can be combined freely.'), true)
+      .select('flow', t('Rechenmodell', 'Maths model'), [['fluid', t('Stable Fluids – Strömungsphysik (mofu)', 'Stable Fluids – flow physics (mofu)')], ['curl', t('Curl-Noise – Rezept (jasper-r / Gaseous Giganticus)', 'Curl noise – recipe (jasper-r / Gaseous Giganticus)')]],
+        t('Woher der Wind kommt. Stable Fluids löst die Strömungsgleichung mit Druck, Coriolis und Wirbeln. Curl-Noise ist ein verwirbeltes Rauschfeld plus Jets und Wirbel, schnell und ohne Physik.',
+          'Where the wind comes from. Stable Fluids solves the flow equation with pressure, Coriolis and vortices. Curl noise is a swirling noise field plus jets and vortices, fast and without physics.'))
+      .select('look', t('Darstellung', 'Look'), [['dye', t('Flüssigkeit (Farbstoff)', 'Liquid (dye)')], ['particles', t('Partikel', 'Particles')], ['pure', t('Partikel rein (wie jasper-r)', 'Pure particles (as jasper-r)')]],
+        t('Wie die Wolken dem Wind folgen. Flüssigkeit: die Farbe wird mitgeführt und kehrt zur Bandfarbe zurück. Partikel: Millionen Punkte fliegen mit dem Wind und malen die Farbe, die ebenfalls zur Bandfarbe zurückkehrt. Partikel rein: wie jasper-r, die Textur verblasst zu einer Mittelfarbe, alle Struktur kommt von den Partikeln. Jede Darstellung geht mit jedem Rechenmodell.',
+          'How clouds follow the wind. Liquid: colour is carried and returns to the band colour. Particles: millions of points ride the wind and paint colour, which also returns to the band colour. Pure particles: as in jasper-r, the texture fades to one mean colour and all structure comes from the particles. Every look works with every maths model.'))
+      .section(t('Zeit und Drehung', 'Time and spin'), undefined, true)
+      .range('timeScale', t('Tempo', 'Tempo'), 0.05, 32, 0.05,
+        t('Wie schnell die Zeit läuft. Ändert nur die Geschwindigkeit, nie die Form: Unter 1 werden die Schritte kleiner (flüssig, gleiche Physik), über 1 werden mehr Schritte gerechnet. Tipp: Jet-Stärke hoch (große, richtige Wirbel) und Tempo runter (planetar langsam).',
+          'How fast time runs. Changes only speed, never shape: below 1 the steps get smaller (smooth, same physics), above 1 more steps are computed. Tip: raise jet strength (big, correct vortices) and lower tempo (slow like a planet).') + fx(t('Δt = 1/60 s · min(Tempo, 1),  Schritte/s = 60 · max(Tempo, 1)', 'Δt = 1/60 s · min(tempo, 1),  steps/s = 60 · max(tempo, 1)')), (v) => `${v.toFixed(2)}×`)
+      .range('spinSpeed', t('Drehgeschwindigkeit', 'Spin speed'), 0, 10, 0.05,
+        t('Sichtbare Eigendrehung, läuft in Simulationszeit (Zeitraffer beschleunigt sie mit). 1 = Tempo passend zur Tageslänge der Vorlage. Ändert nur die Ansicht, nicht die Physik.',
+          'Visible spin, runs in simulation time (time lapse speeds it up too). 1 = matches the preset’s day length. Affects the view only, not the physics.'), (v) => `${v.toFixed(2)}×`)
+      .toggle('retro', t('Rückläufige Drehung', 'Retrograde spin'),
+        t('Dreht Planet und Physik andersherum (wie Venus). Dann drehen Zyklone auf der Nordhalbkugel im Uhrzeigersinn, alle Jets und Stürme spiegeln sich. Normal (aus): von Norden gesehen gegen den Uhrzeigersinn, Nord-Zyklone gegen den Uhrzeigersinn, Süd-Zyklone im Uhrzeigersinn. (Bei Toiletten ist Coriolis dagegen viel zu schwach: Ro ≈ 1000.)',
+          'Spins planet and physics the other way (like Venus). Then northern cyclones turn clockwise, and all jets and storms are mirrored. Normal (off): counter-clockwise seen from the north, northern cyclones counter-clockwise, southern ones clockwise. (For toilets Coriolis is far too weak: Ro ≈ 1000.)') + fx(t('Ω → −Ω,  U(φ) → −U(φ),  Drehsinn → −Drehsinn', 'Ω → −Ω,  U(φ) → −U(φ),  spin → −spin')))
+      .section(t('Wind', 'Wind'), t('Jet-Stärke wirkt in beiden Rechenmodellen, die übrigen Regler bei Stable Fluids. Die Gleichung (2D, inkompressibel, auf der Kugel):', 'Jet strength applies to both maths models, the other controls to Stable Fluids. The equation (2D, incompressible, on the sphere):'), true)
+      .custom(this.formulaNote(t('∂u/∂t + (u·∇)u = −∇p − f k̂×u + F<sub>Jet</sub> + F<sub>Sturm</sub> + ε·F<sub>Wirbel</sub> − r·u,   ∇·u = 0', '∂u/∂t + (u·∇)u = −∇p − f k̂×u + F<sub>jet</sub> + F<sub>storm</sub> + ε·F<sub>vortex</sub> − r·u,   ∇·u = 0')))
+      .range('jetStrength', t('Jet-Geschwindigkeit', 'Jet speed'), 0, 0.5, 0.002,
+        t('Wie schnell die Ost-West-Bänder strömen (Planetenradien pro Sekunde). Nur die Bänder: wie kräftig die Strudel angetrieben werden, stellst du getrennt unter „Strudel-Stärke“ ein, wie schnell alles abläuft unter „Tempo“.',
+          'How fast the east–west bands flow (planet radii per second). Bands only: how strongly eddies are driven is set separately under “Eddy strength”, how fast everything runs under “Tempo”.') + fx(t('U(φ) = U<sub>max</sub> · Profil(φ)', 'U(φ) = U<sub>max</sub> · profile(φ)')), f3)
+      .range('eddyStrength', t('Strudel-Stärke', 'Eddy strength'), 0, 10, 0.05,
+        t('Antrieb aller Strudel: Turbulenz, Stürme, Curl-Noise und Wirbel. Unabhängig von der Jet-Geschwindigkeit, so kannst du ruhige Bänder mit kräftigen Strudeln kombinieren oder umgekehrt. 1 = wie bisher bei Jet-Geschwindigkeit 0,06.',
+          'Drive of all eddies: turbulence, storms, curl noise and vortices. Independent of jet speed, so calm bands can go with strong eddies or the other way round. 1 = as before at jet speed 0.06.') + fx(t('Antrieb = 0,06 · Strudel-Stärke', 'drive = 0.06 · eddy strength')), (v) => `${v.toFixed(2)}×`)
+      .range('jetRelax', t('Jet-Rückstellung', 'Jet restoring'), 0, 5, 0.01,
+        t('Zieht nur das Breitenkreis-Mittel des Ostwinds zum Windprofil zurück; Wirbel bleiben frei. 0 = die Bänder zerfallen mit der Zeit.',
+          'Pulls only the latitude-circle mean of the east wind back to the profile; vortices stay free. 0 = bands decay over time.') + fx('u += ê<sub>E</sub> · (U(φ) − ⟨u·ê<sub>E</sub>⟩<sub>φ</sub>) · k·Δt'), f2)
+      .range('omega', t('Coriolis (Rotation)', 'Coriolis (rotation)'), 0, 30, 0.05,
+        t('Planetenrotation Ω in der Strömungsgleichung. Wirksam ist vor allem ihr Nord-Süd-Gefälle β: es erzeugt Rossby-Wellen und ordnet Turbulenz zu Bändern. Das Verhältnis Wind zu Rotation (Rossby-Zahl) entscheidet, ob es wie eine Teetasse (groß) oder wie ein Planet (klein) aussieht: Jupiter hat Ro ≈ 0,01 bis 0,1, Standard 0,4 ergibt Ro ≈ 0,15 im großen Maßstab.',
+          'Planet rotation Ω in the flow equation. What matters most is its north–south gradient β: it creates Rossby waves and organises turbulence into bands. The ratio of wind to rotation (Rossby number) decides whether it looks like a teacup (large) or a planet (small): Jupiter has Ro ≈ 0.01 to 0.1; the default 0.4 gives Ro ≈ 0.15 at planet scale.') + fx('u′ = u·cos a + (p×u)·sin a,  a = −2Ω·sin φ·Δt;  Ro = U / (2Ω·L)'), f2)
+      .range('turbulence', t('Turbulenz', 'Turbulence'), 0, 10, 0.01,
+        t('Kleine, langsam wandernde Anstöße (divergenzfreies Rauschen). Sie lösen die Scherinstabilitäten an den Jet-Rändern aus.',
+          'Small, slowly drifting kicks (divergence-free noise). They trigger shear instabilities at jet edges.') + fx(t('u += (p × ∇ψ<sub>Rauschen</sub>) · Stärke · Δt', 'u += (p × ∇ψ<sub>noise</sub>) · strength · Δt')), f2)
+      .range('turbScale', t('Turbulenz-Größe', 'Turbulence scale'), 0.2, 40, 0.1,
+        t('Frequenz des Anstoß-Rauschens: klein = wenige große Wirbel, groß = viele feine.', 'Frequency of the kick noise: low = a few big eddies, high = many fine ones.'), (v) => v.toFixed(1))
+      .range('confinement', t('Wirbelverstärkung', 'Vorticity confinement'), 0, 20, 0.05,
+        t('Gibt Wirbeln die Energie zurück, die das grobe Gitter wegschmiert, vor allem den kleinsten. Standard 6 = lebendiger Look von v0.1; physikalisch sauberer ist etwa 0,5.',
+          'Gives vortices back the energy the coarse grid smears away, mostly the smallest. Default 6 = lively v0.1 look; physically cleaner is about 0.5.') + fx('F = ε·Δx·(N × ζp̂),  N = ∇|ζ| / |∇|ζ||'), f2)
+      .range('drag', t('Reibung', 'Drag'), 0, 2, 0.005, t('Bremst den ganzen Wind gleichmäßig ab.', 'Slows the whole wind field uniformly.') + fx('u ← u / (1 + r·Δt)'), f3)
+      .section(t('Stürme', 'Storms'), undefined, true)
       .toggle('storms', t('Vorlagen-Stürme', 'Preset storms'),
-        t('Setzt beim Start die bekannten Stürme der Vorlage als Wirbel ein (z. B. Großer Roter Fleck). Danach leben sie von der Physik allein: Sie treiben, verformen sich, verschmelzen oder zerfallen.',
-          'Seeds the preset’s known storms as vortices at start (e.g. the Great Red Spot). After that they live on physics alone: they drift, deform, merge or decay.'))
+        t('Setzt die bekannten Stürme der Vorlage (z. B. Großer Roter Fleck) beim Start als Wirbel ein.',
+          'Seeds the preset’s known storms (e.g. the Great Red Spot) as vortices at start.') + fx(t('v(d) = 2,33 · x·e<sup>−x²</sup>,  x = d / r', 'v(d) = 2.33 · x·e<sup>−x²</sup>,  x = d / r')))
+      .range('stormSize', t('Sturm-Größe', 'Storm size'), 0.2, 5, 0.05,
+        t('Radius aller Stürme als Faktor, unabhängig vom Drehtempo. Groß und langsam ist so möglich: große Sturm-Größe, kleines Drehtempo.',
+          'Radius of all storms as a factor, independent of spin speed. Big and slow is possible: large storm size, low spin speed.') + fx('r′ = r · Faktor'), (v) => `${v.toFixed(2)}×`)
+      .range('stormStrength', t('Sturm-Drehtempo', 'Storm spin speed'), 0, 10, 0.05, t('Wie schnell sich die Stürme drehen, relativ zur Jet-Stärke. Die Größe stellst du getrennt unter „Sturm-Größe“ ein.', 'How fast storms spin, relative to jet strength. Size is set separately under “Storm size”.'), f2)
       .range('stormHold', t('Stürme festhalten', 'Hold storms'), 0, 1, 0.01,
-        t('Treibt die Vorlagen-Stürme dauerhaft an und färbt sie nach. 0 = reine Physik (Stürme dürfen vergehen), 1 = der Sturm wird ständig nachgeführt wie ein Beobachtungsdatum. Bei Curl-Noise immer voll, weil das Rauschfeld keine eigene Dynamik hat.',
-          'Keeps driving and recolouring the preset storms. 0 = pure physics (storms may fade), 1 = the storm is enforced like observation data. Always full in curl noise mode, which has no dynamics of its own.'), pct)
-      .range('stormSpawn', t('Neue Stürme', 'New storms'), 0, 2, 0.01,
-        t('Wie oft aufsteigende Konvektion einen neuen Wirbel anstößt (pro Sekunde Simulationszeit). Meist Antizyklone (weiße Ovale), manchmal Zyklone (dunkle Barken). Nur bei Stable Fluids.',
-          'How often rising convection kicks off a new vortex (per second of simulated time). Mostly anticyclones (white ovals), sometimes cyclones (dark barges). Stable Fluids only.'), f2)
-      .range('stormStrength', t('Sturm-Stärke', 'Storm strength'), 0, 4, 0.05, t('Drehgeschwindigkeit der Stürme relativ zur Jet-Stärke.', 'Storm spin relative to jet strength.'), f2)
-      .range('stormTint', t('Sturm-Farbe', 'Storm colour'), 0, 4, 0.05, t('Wie stark ein angetriebener Sturm seine eigene Farbe in die Wolken gibt.', 'How strongly a driven storm tints the clouds with its own colour.'), f2)
-      .range('dyeRes', t('Farbauflösung', 'Colour resolution'), 128, 1536, 64,
-        t('Auflösung der Wolkentextur je Würfelfläche. Bestimmt die Schärfe beim Heranzoomen.', 'Cloud texture resolution per cube face. Sets sharpness when zooming in.'), (v) => `${v}²`)
-      .section(t('Licht und Ansicht', 'Light and view'))
+        t('Treibt die Vorlagen-Stürme dauerhaft an. 0 = reine Physik (sie dürfen treiben, verschmelzen, vergehen), 1 = wie ein Beobachtungsdatum festgehalten.',
+          'Keeps driving the preset storms. 0 = pure physics (they may drift, merge, fade), 1 = enforced like observation data.') + fx(t('u += (v<sub>Sturm</sub> − u) · 2·w·Maske·Δt', 'u += (v<sub>storm</sub> − u) · 2·w·mask·Δt')), pct)
+      .range('stormSpawn', t('Neue Stürme', 'New storms'), 0, 5, 0.01,
+        t('Wie oft Konvektion einen neuen Wirbel anstößt (pro Sekunde Simulationszeit). Der Drehsinn folgt der Scherung an der Stelle, denn nur ein mitdrehender Wirbel überlebt sie. In antizyklonalen Zonen entstehen so weiße Ovale, in zyklonalen Gürteln dunkle Barken.',
+          'How often convection kicks off a new vortex (per second of simulated time). Its spin follows the local shear, because only a co-rotating vortex survives it. Anticyclonic zones grow white ovals, cyclonic belts dark barges.') + fx(t('Drehsinn = sign(ζ<sub>Hintergrund</sub>),  ζ ≈ −∂U/∂φ', 'spin = sign(ζ<sub>background</sub>),  ζ ≈ −∂U/∂φ')), f2)
+      .range('kickLife', t('Anstoß-Dauer', 'Kick duration'), 0.5, 120, 0.5,
+        t('Wie lange ein neuer Sturm angetrieben wird, bevor er frei ist. Kurz = kurzes Aufflackern. Lang = er wächst zu einem großen Wirbel heran und lebt dann von der Physik: er treibt mit dem Jet, verschmilzt oder zerfällt.',
+          'How long a new storm is driven before it is free. Short = a brief flicker. Long = it grows into a big vortex and then lives on physics: drifts with the jet, merges or decays.') + fx(t('w(t) = sin(π · t / Dauer)', 'w(t) = sin(π · t / duration)')), (v) => `${v.toFixed(1)} s`)
+      .range('stormTint', t('Sturm-Farbe', 'Storm colour'), 0, 10, 0.05, t('Wie stark ein angetriebener Sturm seine Farbe in die Wolken gibt.', 'How strongly a driven storm tints the clouds.'), f2)
+      .section(t('Wolkenfarbe', 'Cloud colour'), t('Darstellung Flüssigkeit und Partikel. Die Farbe folgt dem Wind und kehrt langsam zur Bandfarbe zurück:', 'Looks liquid and particles. Colour follows the wind and slowly returns to the band colour:'), true)
+      .custom(this.formulaNote(t('c(p) ← mix(c(p − u·Δt), c<sub>Band</sub>(φ + Mäander), 1 − e<sup>−k·Δt</sup>)', 'c(p) ← mix(c(p − u·Δt), c<sub>band</sub>(φ + meander), 1 − e<sup>−k·Δt</sup>)')))
+      .range('bandRelax', t('Band-Rückstellung', 'Band restoring'), 0, 2, 0.005,
+        t('k: wie schnell die Farbe zum Band ihrer Breite zurückkehrt. 0 = alles vermischt sich zu Brei, hoch = starre Streifen. Zeitkonstante 1/k: bei 0,06 etwa 17 s, so lange dauert es auch, bis eine Änderung eingeschwungen ist.',
+          'k: how fast colour returns to its latitude’s band. 0 = everything mixes into mush, high = rigid stripes. Time constant 1/k: about 17 s at 0.06, which is also how long a change takes to settle.'), f3)
+      .range('fineStripes', t('Feinstreifen', 'Fine stripes'), 0, 5, 0.05,
+        t('Feine Farbstreifen innerhalb der Bänder. Erst sie machen sichtbar, wie die Strömung Farbe zu Filamenten zieht.',
+          'Fine colour stripes inside the bands. They make it visible how the flow pulls colour into filaments.'), f2)
+      .range('bandWobble', t('Band-Mäander', 'Band meander'), 0, 6, 0.05, t('Verbiegt die Bandgrenzen mit Rauschen.', 'Bends band edges with noise.') + fx(t('φ′ = φ + Rauschen(4p) · m · 0,04', 'φ′ = φ + noise(4p) · m · 0.04')), f2)
+      .range('contrast', t('Band-Kontrast', 'Band contrast'), 0, 4, 0.05, t('Farbunterschied zwischen hellen Zonen und dunklen Gürteln.', 'Colour difference between bright zones and dark belts.') + fx(t('c = c̄ + (c − c̄) · Kontrast', 'c = c̄ + (c − c̄) · contrast')), f2)
+      .range('convection', t('Konvektion', 'Convection'), 0, 10, 0.05, t('Helle Wolkentürme, die aus der Tiefe aufsteigen (Ammoniak-Eis).', 'Bright cloud towers rising from below (ammonia ice).'), f2)
+      .section(t('Curl noise', 'Curl noise'), t('Rechenmodell Curl-Noise: Wind = Jets + Curl-Noise + Wirbel.', 'Maths model curl noise: wind = jets + curl noise + vortices.'), true)
+      .custom(this.formulaNote(t('v = ê<sub>Ost</sub>·U(φ) + p × ∇ψ + Σ Wirbel,   ψ = Σ<sub>k</sub> ½<sup>k</sup> · Rauschen(2<sup>k</sup> f · p, t)', 'v = ê<sub>E</sub>·U(φ) + p × ∇ψ + Σ vortices,   ψ = Σ<sub>k</sub> ½<sup>k</sup> · noise(2<sup>k</sup> f · p, t)')))
+      .range('curlStrength', t('Stärke', 'Strength'), 0, 10, 0.01, t('Wie stark das Rauschfeld gegenüber den Jets ist.', 'Strength of the noise field relative to the jets.'), f2)
+      .range('curlFreq', t('Frequenz', 'Frequency'), 0.2, 32, 0.1, t('Grundfrequenz f des Rauschens: hoch = viele kleine Wirbel.', 'Base frequency f of the noise: high = many small swirls.'), (v) => v.toFixed(1))
+      .range('curlSpeed', t('Veränderung', 'Evolution'), 0, 0.5, 0.005, t('Wie schnell sich das Rauschfeld mit der Zeit umbaut.', 'How fast the noise field changes over time.'), f3)
+      .range('curlOctaves', t('Oktaven', 'Octaves'), 1, 6, 1, t('Anzahl überlagerter Rausch-Ebenen k. Mehr = feinere Details.', 'Number of stacked noise layers k. More = finer detail.'))
+      .range('vortexCount', t('Wirbel', 'Vortices'), 0, 256, 1,
+        t('Eingestreute Wirbel (Gaseous Giganticus). Nur wo die Jets schwach sind, und nur mit dem Drehsinn der lokalen Scherung, sonst würden sie zerrissen.',
+          'Seeded vortices (Gaseous Giganticus). Only where jets are weak, and only with the spin of the local shear, otherwise they would be torn apart.') + fx(t('ω(d) = ω₀·sin(π·d/r),  Drehsinn = sign(−∂U/∂φ)', 'ω(d) = ω₀·sin(π·d/r),  spin = sign(−∂U/∂φ)')))
+      .range('vortexStrength', t('Wirbel-Stärke', 'Vortex strength'), 0, 10, 0.05, t('Drehgeschwindigkeit ω₀ der eingestreuten Wirbel relativ zur Jet-Stärke.', 'Spin ω₀ of the seeded vortices relative to jet strength.'), f2)
+      .section(t('Partikel', 'Particles'), t('Darstellung Partikel. Jeder Partikel bewegt sich mit dem Wind und mischt seine Farbe in die Textur:', 'Particle looks. Each particle moves with the wind and blends its colour into the texture:'), true)
+      .custom(this.formulaNote(t('p ← normalize(p + v(p + v·Δt/2)·Δt),   c<sub>Texel</sub> ← mix(c<sub>Texel</sub>, c<sub>Partikel</sub>, α·sin(π·Alter/Lebensdauer))', 'p ← normalize(p + v(p + v·Δt/2)·Δt),   c<sub>texel</sub> ← mix(c<sub>texel</sub>, c<sub>particle</sub>, α·sin(π·age/lifetime))')))
+      .range('lifetime', t('Lebensdauer', 'Lifetime'), 0.5, 60, 0.5,
+        t('Sekunden bis zur Neugeburt. Lang = lange Schlieren. Bei 60 leben Partikel ewig (Gaseous Giganticus).',
+          'Seconds until rebirth. Long = long streaks. At 60 particles live forever (Gaseous Giganticus).'), (v) => (v >= 60 ? t('ewig', 'forever') : `${v.toFixed(1)} s`))
+      .range('opacity', t('Deckkraft', 'Opacity'), 0.01, 1, 0.01, t('α: wie stark ein Partikel seine Farbe in die Textur schreibt.', 'α: how strongly a particle writes its colour into the texture.'), pct)
+      .range('blur', t('Weichzeichnen', 'Blur'), 0, 1, 0.01, t('Verwischt die Textur jedes Bild ein wenig, damit aus Punkten Wolken werden.', 'Blurs the texture slightly every frame so points become clouds.') + fx(t('c ← mix(c, Mittel der 4 Nachbarn, b)', 'c ← mix(c, mean of 4 neighbours, b)')), pct)
+      .range('fade', t('Verblassen', 'Fade'), 0, 1, 0.005,
+        t('Nur Darstellung „Partikel rein“: wie schnell die Textur zu einer einzigen Mittelfarbe verblasst (jasper-r). Die Bänder entstehen dann allein aus den Partikeln.',
+          '“Pure particles” look only: how fast the texture fades to one mean colour (jasper-r). Bands then come from the particles alone.') + fx(t('c ← mix(c, c<sub>Mittel</sub>, 1 − e<sup>−k·Δt</sup>)', 'c ← mix(c, c<sub>mean</sub>, 1 − e<sup>−k·Δt</sup>)')), f3)
+      .range('viewFocus', t('Sichtfeld-Anteil', 'View focus'), 0, 0.95, 0.05,
+        t('Anteil der Partikel, die auf der sichtbaren Seite geboren werden. Bei 0,8 landen 80 % der Rechenarbeit dort, wo du hinschaust: schärfer beim Heranzoomen, gleiche Kosten. Die Rückseite verblasst dann langsamer als sie bemalt wird; zu hoch gewählt wirkt sie beim Drehen blasser.',
+          'Share of particles born on the visible side. At 0.8, 80 % of the work lands where you look: sharper when zooming in, same cost. The far side then gets painted less; set too high it looks paler when it turns into view.'), pct)
+      .section(t('Licht und Ansicht', 'Light and view'), undefined, true)
       .range('sunAngle', t('Sonnenstand', 'Sun angle'), -180, 180, 1,
         t('Richtung der Sonne. 0° = Sonne hinter der Kamera (voller Planet), 90° = Halbphase.', 'Sun direction. 0° = sun behind the camera (full disc), 90° = half phase.'), (v) => `${v}°`)
-      .range('relief', 'Relief', 0, 2, 0.01,
-        t('Hebt helle Wolken optisch an und wirft weiche Schatten, wie bei den Juno-Nahaufnahmen.', 'Lifts bright clouds visually and casts soft shadows, as in Juno close-ups.'), f2)
+      .range('relief', 'Relief', 0, 5, 0.01,
+        t('Neigt die Flächennormale nach der Helligkeit: helle Wolken wirken höher und werfen weiche Schatten. Das ist eine Beleuchtungs-Täuschung, keine echte Höhe (keine Parallaxe, keine Silhouette).',
+          'Tilts the surface normal by brightness: bright clouds look higher and cast soft shading. This is a lighting trick, not real height (no parallax, no silhouette).') + fx(t('n′ = normalize(n − ∇Helligkeit · Relief · 3)', 'n′ = normalize(n − ∇brightness · relief · 3)')), f2)
       .range('limb', t('Randverdunkelung', 'Limb darkening'), 0.8, 2, 0.01,
-        t('Minnaert-Exponent. 1 = matte Kugel; höher = dunkler Rand wie bei echten Gasplaneten.', 'Minnaert exponent. 1 = matte sphere; higher = darker limb, as on real gas giants.'), f2)
-      .range('atmosphere', t('Dunstsaum', 'Haze rim'), 0, 3, 0.05, t('Helligkeit des Atmosphärensaums am Planetenrand.', 'Brightness of the atmospheric rim at the planet’s edge.'), f2)
-      .range('exposure', t('Belichtung', 'Exposure'), 0.3, 3, 0.05, t('Gesamthelligkeit.', 'Overall brightness.'), f2)
-      .range('spinSpeed', t('Drehgeschwindigkeit', 'Spin speed'), 0, 5, 0.05,
-        t('Sichtbare Eigendrehung. Von Norden gesehen gegen den Uhrzeigersinn, mit Norden oben laufen die Wolken also von links nach rechts. 1 = Tempo passend zur Tageslänge der Vorlage, 0 = steht still. Ändert nur die Ansicht, nicht die Physik.',
-          'Visible spin. Counter-clockwise seen from the north, so with north up the clouds move left to right. 1 = matches the preset’s day length, 0 = still. Affects the view only, not the physics.'), (v) => `${v.toFixed(2)}×`)
+        t('Minnaert-Exponent k. 1 = matte Kugel; höher = dunkler Rand wie bei echten Gasplaneten.', 'Minnaert exponent k. 1 = matte sphere; higher = darker limb, as on real gas giants.') + fx('I = (n·l)<sup>k</sup> · (n·v)<sup>k−1</sup>'), f2)
+      .range('atmosphere', t('Dunstsaum', 'Haze rim'), 0, 6, 0.05, t('Helligkeit des Atmosphärensaums am Planetenrand.', 'Brightness of the atmospheric rim at the planet’s edge.') + fx(t('Saum = e<sup>−h/0,025</sup>', 'rim = e<sup>−h/0.025</sup>')), f2)
+      .range('exposure', t('Belichtung', 'Exposure'), 0.1, 5, 0.05, t('Gesamthelligkeit vor der ACES-Tonwertkurve.', 'Overall brightness before the ACES tone curve.'), f2)
       .toggle('map', t('Kartenansicht', 'Map view'),
-        t('Zeigt die ganze Kugel als flache Weltkarte (Längen- und Breitengrade). Gut, um Jets und Stürme zu vergleichen.', 'Shows the whole sphere as a flat map (longitude/latitude). Good for comparing jets and storms.'))
+        t('Zeigt die ganze Kugel als flache Weltkarte (Längen- und Breitengrade).', 'Shows the whole sphere as a flat map (longitude/latitude).'))
       .select('view', t('Feld anzeigen', 'Show field'), [['0', t('Wolken', 'Clouds')], ['1', t('Wind (Richtung)', 'Wind (direction)')], ['2', t('Wirbelstärke', 'Vorticity')], ['3', t('Druck', 'Pressure')]],
-        t('Debug-Ansichten. Wind: Rot = Ost, Grün = Nord. Wirbelstärke: Rot = gegen den Uhrzeigersinn, Blau = im Uhrzeigersinn. Druck gibt es nur bei Stable Fluids.',
-          'Debug views. Wind: red = east, green = north. Vorticity: red = counter-clockwise, blue = clockwise. Pressure exists only with Stable Fluids.'));
+        t('Debug-Ansichten. Wind: Rot = Ost, Grün = Nord. Wirbelstärke: Rot = gegen den Uhrzeigersinn, Blau = im Uhrzeigersinn. Druck nur bei Stable Fluids.',
+          'Debug views. Wind: red = east, green = north. Vorticity: red = counter-clockwise, blue = clockwise. Pressure only with Stable Fluids.'))
+      .section(t('Grafikkarte und Feinheit', 'GPU and detail'), t('Diese Regler kosten Rechenleistung. Sie machen das Bild feiner, ändern aber nicht, was physikalisch passiert.', 'These controls cost GPU time. They make the image finer but do not change what happens physically.'), true)
+      .select('quality', t('Gerät (Startwerte)', 'Device (start values)'), [
+        ['phone', t('Smartphone', 'Smartphone')],
+        ['standard', t('Laptop / integrierte GPU', 'Laptop / integrated GPU')],
+        ['high', t('Desktop-GPU', 'Desktop GPU')],
+        ['ultra', t('High-End-GPU (z. B. RTX 4080/5080)', 'High-end GPU (e.g. RTX 4080/5080)')],
+      ],
+        t('Setzt Startwerte für Gitter, Farbauflösung, Partikelzahl und Render-Auflösung. Die Regler selbst gehen immer bis zum Maximum (32 Mio. Partikel, 2048² Farbe, 384² Gitter), egal welches Gerät gewählt ist.',
+          'Sets starting values for grid, colour resolution, particle count and render resolution. The controls always go to the maximum (32 M particles, 2048² colour, 384² grid), whatever device is chosen.'))
+      .range('pixelDensity', t('Render-Auflösung', 'Render resolution'), 0.5, 4, 0.05,
+        t('Pixel pro Bildschirmpunkt. 1 = Bildschirmauflösung, 2–3 = Supersampling: deutlich schärfere Kanten und Filamente, kostet quadratisch mehr GPU. Für eine RTX 4080/5080 ruhig 2 bis 3.',
+          'Pixels per screen point. 1 = screen resolution, 2–3 = supersampling: much sharper edges and filaments, costs quadratically more GPU. On an RTX 4080/5080 use 2 to 3.'), (v) => `${v.toFixed(2)}×`)
+      .toggle('autoQuality', t('60 fps halten', 'Hold 60 fps'),
+        t('Misst beim Laden, wie schnell deine Grafikkarte einen Simulationsschritt rechnet, und senkt bei Bedarf die Auflösung. Danach passt sich die Render-Auflösung laufend an, damit die Bildrate über 58 fps bleibt.',
+          'Measures during loading how fast your GPU computes a simulation step and lowers the resolution if needed. Afterwards the render resolution adapts continuously to keep the frame rate above 58 fps.'))
+      .range('dyeRes', t('Farbauflösung', 'Colour resolution'), 128, lim.dyeRes, 64,
+        t('Auflösung der Wolkentextur je Würfelfläche. Bestimmt die Schärfe beim Heranzoomen. Kosten wachsen mit N².', 'Cloud texture resolution per cube face. Sets sharpness when zooming in. Cost grows with N².'), (v) => `${v}²`)
+      .range('velRes', t('Gitter je Würfelfläche', 'Grid per cube face'), 32, lim.velRes, 16,
+        t('Auflösung des Windgitters: 6 × N × N Zellen auf der Kugel. Kosten wachsen mit N².', 'Wind grid resolution: 6 × N × N cells on the sphere. Cost grows with N².'), (v) => `${v}²`)
+      .range('curlRes', t('Feinheit Strömungsfeld', 'Flow field resolution'), 64, lim.curlRes, 64,
+        t('Auflösung des Strömungsfelds je Würfelfläche. Gaseous Giganticus nutzt 2048. Feiner = feinere Filamente.',
+          'Flow field resolution per cube face. Gaseous Giganticus uses 2048. Finer = finer filaments.'), (v) => `${v}²`)
+      .range('particles', t('Partikel-Anzahl', 'Particle count'), 16384, lim.particles, 16384,
+        t('Anzahl der Partikel. jasper-r: 4 Mio. bei 80 fps. Handys schaffen etwa 0,25 bis 1 Mio., eine RTX 5080 deutlich über 16 Mio. Obergrenze je nach „Gerät“.',
+          'Number of particles. jasper-r: 4 M at 80 fps. Phones manage about 0.25 to 1 M, an RTX 5080 well over 16 M. Upper limit depends on “Device”.'), n)
+      .range('iterations', t('Druck-Iterationen', 'Pressure iterations'), 2, 200, 1,
+        t('Jacobi-Schritte für die Druckgleichung. Mehr = sauberer divergenzfrei, aber teurer. Der wichtigste Leistungsregler.',
+          'Jacobi steps for the pressure equation. More = closer to divergence-free, but slower. The most important performance control.') + fx('∇²p = ∇·u,  u ← u − ∇p'))
+      .toggle('bfecc', t('BFECC-Advektion', 'BFECC advection'),
+        t('Fehlerkorrektur beim Mitführen: vor, zurück, halben Fehler abziehen. Schärfere Wirbel und Kanten.',
+          'Error correction during transport: back, forth, subtract half the error. Sharper vortices and edges.') + fx('x̃ = x − ½(back(forth(x)) − x)'));
     this.panel.section(t('Speichern und Rückgängig', 'Save and undo'), t('Strg+Z / Strg+Y machen Änderungen rückgängig. Doppelklick auf einen Reglernamen setzt nur diesen zurück.', 'Ctrl+Z / Ctrl+Y undo and redo. Double-click a control name to reset just that control.'));
     this.buildSaveSection();
+    this.panel.section(t('Diagnose', 'Diagnostics'), undefined, false)
+      .buttons([
+        ['btn-film', t('🎞 Filmstreifen aufnehmen', '🎞 Record film strip'), () => this.recordFilmstrip()],
+        ['btn-selftest', t('Kanten-Selbsttest', 'Seam self-test'), () => this.runSelftest()],
+      ], {
+        'btn-film': t('Nimmt 8 Bilder im Abstand von 2 s auf und speichert sie als ein PNG mit Einstellungen und fps. Zeigt Bewegung, die ein einzelnes Standbild nicht zeigt. Gut zum Anhängen an ein GitHub-Issue.',
+          'Takes 8 frames 2 s apart and saves them as one PNG with settings and fps. Shows motion a single still cannot. Good for attaching to a GitHub issue.'),
+        'btn-selftest': t('Misst auf deiner Grafikkarte, ob die Cubemap-Abtastung an Würfelkanten nahtlos ist. Wenn nicht, schaltet er die exakte Abtastung ein.',
+          'Measures on your GPU whether cube-map sampling is seamless at cube edges. If not, it turns on exact sampling.'),
+      })
+      .toggle('seamless', t('Exakte Kanten', 'Exact edges'),
+        t('Tastet an Würfelkanten die Nachbartexel einzeln ab, statt der Hardware zu vertrauen. Nur nötig, wenn der Selbsttest eine Naht findet; kostet etwas Leistung.',
+          'Samples neighbouring texels one by one at cube edges instead of trusting the hardware. Only needed if the self-test finds a seam; costs some performance.'))
+      .custom(this.diagNote());
+    this.buildToolbar();
     this.updateVisibility();
     this.applyStaticText();
   }
 
+  private formulaNote(f: string): HTMLElement {
+    const p = document.createElement('p');
+    p.className = 'note formula';
+    p.innerHTML = `<code class="fx">${f}</code>`;
+    return p;
+  }
+
+  private diagNote(): HTMLElement {
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.id = 'diag-msg';
+    p.setAttribute('aria-live', 'polite');
+    return p;
+  }
+
   /** Feste Texte der Seite in der aktuellen Sprache. */
   private applyStaticText() {
+    const ver = document.getElementById('version');
+    if (ver) ver.textContent = __VERSION__;
     const set = (id: string, text: string) => { const el = document.getElementById(id); if (el) el.textContent = text; };
     set('hint', t('ziehen zum Drehen, Mausrad oder zwei Finger zum Zoomen', 'drag to rotate, scroll or pinch to zoom'));
     set('load-title', t('Atmosphäre wird eingeschwungen', 'Spinning up the atmosphere'));
@@ -1074,29 +1477,94 @@ class App {
     this.updateInfo();
   }
 
+  /** Steckbrief oben links: bekannte Werte des Planeten (bei Zufallsplaneten plausibel geschätzt). */
   private updateInfo() {
     const info = document.getElementById('planet-info');
     if (!info) return;
     const p = this.preset;
-    info.textContent = `${p.name} · ${t('Abplattung', 'oblateness')} ${p.oblateness.toFixed(3)} · ${t('Achse', 'tilt')} ${p.tilt.toFixed(1)}° · ${t('Tag', 'day')} ${p.rotationHours.toFixed(1)} h · ${p.storms.length} ${t('Stürme', 'storms')}`;
+    const f = p.facts;
+    const nf = (v: number, d = 0) => v.toLocaleString(lang === 'de' ? 'de-DE' : 'en-US', { maximumFractionDigits: d });
+    const rows: [string, string][] = [];
+    if (f) {
+      const earthD = f.diameterKm / 12742;
+      rows.push([t('Durchmesser', 'Diameter'), `${nf(f.diameterKm)} km (${nf(earthD, 1)}× ${t('Erde', 'Earth')})`]);
+      rows.push([t('Abstand zum Stern', 'Distance to star'), `${nf(f.distanceAU, f.distanceAU < 1 ? 3 : 2)} AE`.replace('AE', t('AE', 'AU'))]);
+      rows.push([t('Jahr', 'Year'), f.yearDays < 400 ? `${nf(f.yearDays, 1)} ${t('Tage', 'days')}` : `${nf(f.yearDays / 365.25, 1)} ${t('Erdjahre', 'Earth years')}`]);
+      rows.push([t('Tag', 'Day'), f.locked ? t(`gebunden (= Jahr)`, 'tidally locked (= year)') : `${nf(p.rotationHours, 1)} h`]);
+      rows.push([t('Temperatur', 'Temperature'), `${nf(f.tempC)} °C ${t('(Wolkenobergrenze)', '(cloud tops)')}`]);
+      rows.push([t('Schwerkraft', 'Gravity'), `${nf(f.gravity, 1)} m/s² (${nf(f.gravity / 9.81, 2)} g)`]);
+      rows.push([t('Stärkste Winde', 'Fastest winds'), `${nf(f.windMs)} m/s (${nf(f.windMs * 3.6)} km/h)`]);
+      rows.push([t('Wolken aus', 'Clouds of'), t(f.clouds[0], f.clouds[1])]);
+      rows.push([t('Monde', 'Moons'), nf(f.moons)]);
+    } else {
+      rows.push([t('Tag', 'Day'), `${nf(p.rotationHours, 1)} h`]);
+    }
+    rows.push([t('Achsneigung', 'Axial tilt'), `${nf(p.tilt, 1)}°`]);
+    rows.push([t('Abplattung', 'Oblateness'), nf(p.oblateness, 3)]);
+    rows.push([t('Stürme', 'Storms'), String(p.storms.length)]);
+    const esc = (x: string) => x.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' } as Record<string, string>)[c]);
+    info.innerHTML = `<div class="facts-name">${esc(p.name)}${f?.note ? ` <span>· ${esc(t(f.note[0], f.note[1]))}</span>` : ''}</div>`
+      + `<dl class="facts">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
   }
 
   private updateVisibility() {
-    const fluid = S.flow === 'fluid', parts = S.look === 'particles';
-    for (const k of ['jetRelax', 'omega', 'turbulence', 'turbScale', 'confinement', 'drag', 'iterations', 'velRes', 'stormSpawn']) this.panel.visible(k, fluid);
+    const fluid = this.flowMode() === 'fluid', look = this.lookMode();
+    for (const k of ['jetRelax', 'omega', 'turbulence', 'turbScale', 'confinement', 'drag', 'iterations', 'velRes', 'bfecc', 'stormSpawn', 'kickLife', 'stormHold']) this.panel.visible(k, fluid);
     for (const k of ['curlStrength', 'curlFreq', 'curlSpeed', 'curlOctaves', 'vortexCount', 'vortexStrength', 'curlRes']) this.panel.visible(k, !fluid);
-    for (const k of ['particles', 'lifetime', 'opacity', 'blur']) this.panel.visible(k, parts);
+    for (const k of ['particles', 'lifetime', 'opacity', 'blur', 'viewFocus']) this.panel.visible(k, look !== 'dye');
+    this.panel.visible('fade', look === 'pure');
+    for (const k of ['bandRelax', 'fineStripes', 'convection', 'stormTint']) this.panel.visible(k, look !== 'pure');
+    // Abschnitte ohne sichtbare Regler ganz ausblenden
+    for (const d of document.querySelectorAll<HTMLDetailsElement>('#panel-body details')) {
+      const rows = [...d.querySelectorAll<HTMLElement>('.row')];
+      d.hidden = rows.length > 0 && rows.every((r) => r.hidden);
+    }
+  }
+
+  /** Vorspulen: Sekunden Simulationszeit ohne Bild vorausrechnen, ohne Ladezeit-Grenze. */
+  private skip(seconds: number) {
+    const steps = Math.round(seconds / DT);
+    this.warm = steps; this.warmTotal = steps;
+    this.warmStart = performance.now();
+    this.manualSkip = true;
+    showLoading(true);
+  }
+
+  /** Immer sichtbare Knopfleiste oben im Panel. */
+  private buildToolbar() {
+    const bar = document.getElementById('toolbar');
+    if (!bar) return;
+    bar.innerHTML = '';
+    const mk = (id: string, label: string, title: string, fn: () => void) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.id = id; b.textContent = label; b.title = title;
+      b.addEventListener('click', fn);
+      bar.append(b);
+      return b;
+    };
+    mk('btn-warm', t('⏩ 20 s', '⏩ 20 s'), t('20 Sekunden Simulationszeit vorspulen: sofort den eingeschwungenen Zustand sehen.', 'Skip 20 seconds of simulation time: see the settled state right away.'),
+      () => this.skip(20));
+    mk('btn-warm60', t('⏩ 60 s', '⏩ 60 s'), t('60 Sekunden Simulationszeit vorspulen.', 'Skip 60 seconds of simulation time.'), () => this.skip(60));
+    mk('btn-warm600', t('⏩ 600 s', '⏩ 600 s'), t('10 Minuten Simulationszeit vorspulen. Dauert je nach Grafikkarte einige Sekunden.', 'Skip 10 minutes of simulation time. Takes a few seconds depending on the GPU.'), () => this.skip(600));
+    const pause = mk('btn-pause', S.paused ? t('▶ Weiter', '▶ Resume') : t('⏸ Pause', '⏸ Pause'), t('Simulation anhalten oder weiterlaufen lassen.', 'Pause or resume the simulation.'), () => {
+      S.paused = !S.paused;
+      pause.textContent = S.paused ? t('▶ Weiter', '▶ Resume') : t('⏸ Pause', '⏸ Pause');
+    });
+    mk('btn-reset', t('↻ Neuer Lauf', '↻ New run'), t('Gleicher Planet, gleiche Regler, neu gewürfelte Turbulenz.', 'Same planet, same controls, freshly rolled turbulence.'),
+      () => { this.runSeed = Math.floor(Math.random() * 100000); this.needsInit = true; });
   }
 
   private resetSettings() {
-    const keep = { preset: S.preset, quality: S.quality, velRes: S.velRes, dyeRes: S.dyeRes, curlRes: S.curlRes, particles: S.particles, seed: S.seed };
+    const keep = { preset: S.preset, quality: S.quality, velRes: S.velRes, dyeRes: S.dyeRes, curlRes: S.curlRes, particles: S.particles, seed: S.seed,
+      rndFamily: S.rndFamily, rndBands: S.rndBands, rndStorms: S.rndStorms, rndRings: S.rndRings };
+    const retroChanged = S.retro !== DEFAULTS.retro;
     Object.assign(S, DEFAULTS, keep);
     this.applyPreset();
+    if (retroChanged) this.spin = -this.spin;
     canvas.classList.toggle('map', S.map);
     this.updateVisibility();
     this.panel.refresh();
-    const pause = document.getElementById('btn-pause');
-    if (pause) pause.textContent = 'Pause';
+    this.buildToolbar();
     this.remember();
   }
 
@@ -1109,21 +1577,44 @@ class App {
   private onChange(key: Key) {
     this.remember();
     switch (key) {
-      case 'preset': if (S.preset === 'Zufall') S.seed = newSeed(); this.applyPreset(); break;
-      case 'quality': this.downgrades = 0; this.applyQuality(true); this.panel.refresh(); break;
+      case 'preset': if (S.preset === 'Zufall') S.seed = newSeed(); this.applyPreset(); this.buildUI(); break;
+      case 'rndFamily': case 'rndBands': case 'rndStorms': case 'rndRings':
+        if (S.preset === 'Zufall') this.applyPreset();
+        break;
+      case 'quality': {
+        // Geräteklasse: Startwerte und Reglergrenzen neu, Panel neu aufbauen.
+        this.downgrades = 0; this.renderScale = 1;
+        this.applyQuality(true);
+        this.buildUI();
+        break;
+      }
       case 'contrast': this.writeTables(); break;
       case 'fineStripes': this.needsDye = true; break;
       case 'velRes': case 'curlRes': this.allocVel(); break;
       case 'dyeRes': this.allocDye(); break;
       case 'particles': this.allocParticles(); break;
-      case 'flow': case 'look': this.updateVisibility(); break;
+      case 'flow': case 'look': this.updateVisibility(); this.needsDye = true; break;
+      case 'retro': this.usePreset(this.preset); this.needsInit = true; break;
+      case 'seamless': this.buildPipes(S.seamless); break;
       case 'map': canvas.classList.toggle('map', S.map); break;
       case 'autoQuality': this.renderScale = 1; break;
+      case 'pixelDensity': this.dpr = S.pixelDensity; break;
     }
   }
 }
 
 // Für automatische Tests und die Konsole
-declare global { interface Window { gasPlanet?: { settings: typeof S; capture: () => Promise<string>; readRow: (w: 'dye' | 'flow' | 'vel', face: number, y: number) => Promise<number[][]> } } }
+declare global {
+  interface Window {
+    gasPlanet?: {
+      settings: typeof S;
+      capture: () => Promise<string>;
+      readRow: (w: 'dye' | 'flow' | 'vel', face: number, y: number) => Promise<number[][]>;
+      filmstrip: (o?: FilmOptions) => Promise<Filmstrip>;
+      selftest: () => Promise<{ edge: number; interior: number; seamless: boolean }>;
+      frame: () => number;
+    };
+  }
+}
 
 start().catch((e) => fail(`${t('<b>Start fehlgeschlagen:</b>', '<b>Start failed:</b>')} ${e instanceof Error ? e.message : String(e)}`));
