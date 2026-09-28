@@ -20,7 +20,7 @@ const isPhone = matchMedia('(pointer: coarse)').matches && Math.min(screen.width
 const S = {
   preset: 'Jupiter',
   seed: 1,
-  quality: isPhone ? 'phone' : 'standard',
+  quality: isPhone ? 'phone' : 'high',
   // Rechenmodell und Darstellung, frei kombinierbar:
   flow: 'fluid',          // 'fluid' = Stable Fluids (mofu), 'curl' = Curl-Noise (jasper-r / Gaseous Giganticus)
   look: 'dye',            // 'dye' = Farbstoff, 'particles' = Partikel mit Bandfarben, 'pure' = reine Partikel (jasper-r)
@@ -69,16 +69,35 @@ const S = {
   contrast: 1,
   convection: 0.8,
   storms: true,
+  remember: false,        // Modul „Zustand merken“: eingeschwungenen Zustand im Browser speichern, beim nächsten Laden sofort da
+  focusStorm: true,       // beim Start den Hauptsturm (z. B. Großer Roter Fleck) auf die Tagseite vor die Kamera drehen
   stormStrength: 1,
   stormSize: 1,
-  eddyStrength: 1,        // Strudel-Stärke: Antrieb von Turbulenz, Stürmen und Wirbeln, getrennt von der Jet-Geschwindigkeit           // Größe der Stürme (Radius-Faktor), unabhängig vom Drehtempo
+  eddyStrength: 1.5,      // Flüssigkeit 1,5 (Vorgabe des Urhebers), Partikel 1 – siehe EDDY_BY_LOOK
+        // Strudel-Stärke: Antrieb von Turbulenz, Stürmen und Wirbeln, getrennt von der Jet-Geschwindigkeit           // Größe der Stürme (Radius-Faktor), unabhängig vom Drehtempo
   stormTint: 0.6,
   stormHold: 1,
-  stormSpawn: 0.3,
-  kickLife: 2.5,          // Sekunden, die ein neuer Sturm angetrieben wird, danach lebt er frei
+  stormSpawn: 2,          // Vorgabe des Urhebers (war 0,3)
+  kickLife: 30,           // Vorgabe des Urhebers (war 2,5)
+          // Sekunden, die ein neuer Sturm angetrieben wird, danach lebt er frei
   // Licht und Ansicht
   sunAngle: 35,
-  relief: 0.35,
+  // Relief-Module (alle aus = wie v0.4)
+  reliefMulti: false,     // mehrstufiges Relief
+  reliefCoarse: 1,        // Anteil der groben Stufen (große Wirbel, Bänder)
+  reliefFine: 0.3,        // Anteil der feinen Stufe (Krümel, Partikel)
+  reliefSize: 1,          // Größe der groben Stufen
+  reliefAdapt: true,      // Schrittweite an die Pixelgröße anpassen (gegen Krabbeln/Flimmern)
+  depthOn: false,         // Tiefe aus der Physik
+  depthStrength: 1,
+  depthSource: 'pressure',// 'pressure' (nur Stable Fluids) | 'vorticity' (beide Modelle)
+  twilight: 'off',       // Vorgabe des Urhebers (v0.4-Streifen sah wie eine Kraterlinie aus)
+        // Dämmerung: 'v04' | 'off' | 'soft'
+  rimGlow: 'v04',         // Randschimmer: 'v04' | 'soft' | 'off'
+  pomOn: false,           // Parallaxe mit Eigenschatten
+  pomHeight: 1,
+  pomShadow: 1,
+  relief: 1,              // Flüssigkeit 1,0 (Vorgabe des Urhebers), Partikel 0,35 – siehe RELIEF_BY_LOOK
   limb: 1.15,
   atmosphere: 1,
   exposure: 0.95,
@@ -88,20 +107,26 @@ const S = {
   view: 0,
   map: false,
 };
+// „Zustand merken“ bleibt über das Neuladen hinweg an (sonst wäre es nach jedem Laden wieder aus)
+try { S.remember = localStorage.getItem('fgp-remember') === '1'; } catch { /* Speicher gesperrt */ }
 type Key = keyof typeof S;
+const RELIEF_BY_LOOK: Record<string, number> = { dye: 1, particles: 0.35, pure: 0.35 };  // Flüssigkeit 1,0 (Vorgabe des Urhebers)
+const EDDY_BY_LOOK: Record<string, number> = { dye: 1.5, particles: 1, pure: 1 };
 const DEFAULTS = { ...S };
 
 // Geräteklassen: Startwerte und Obergrenzen der Regler. "ultra" schaltet die großen Werte frei.
-const QUALITY: Record<string, { velRes: number; dyeRes: number; curlRes: number; particles: number; dpr: number;
-  max: { velRes: number; dyeRes: number; curlRes: number; particles: number } }> = {
-  phone: { velRes: 96, dyeRes: 384, curlRes: 256, particles: 262144, dpr: 1,
-    max: { velRes: 128, dyeRes: 768, curlRes: 512, particles: 1048576 } },
-  standard: { velRes: 128, dyeRes: 768, curlRes: 384, particles: 1048576, dpr: 1.25,
-    max: { velRes: 192, dyeRes: 1024, curlRes: 768, particles: 4194304 } },
-  high: { velRes: 192, dyeRes: 1024, curlRes: 768, particles: 4194304, dpr: 1.75,
-    max: { velRes: 256, dyeRes: 1536, curlRes: 1024, particles: 8388608 } },
-  ultra: { velRes: 256, dyeRes: 1536, curlRes: 1024, particles: 8388608, dpr: 2,
-    max: { velRes: 1024, dyeRes: 8192, curlRes: 4096, particles: 67108864 } },
+type Tier = { velRes: number; dyeRes: number; curlRes: number; particles: number; dpr: number; iterations?: number;
+  fluid?: { velRes: number; dpr: number } };  // fluid = abweichende Startwerte, wenn die Darstellung "Flüssigkeit" ist
+const QUALITY: Record<string, Tier> = {
+  // Startwerte vom Urheber (2026-09-28, auf Hardware ausgesucht)
+  phone: { velRes: 128, dyeRes: 1024, curlRes: 256, particles: 983040, dpr: 1, iterations: 12 },
+  standard: { velRes: 128, dyeRes: 768, curlRes: 384, particles: 1048576, dpr: 1.25 },
+  high: { velRes: 256, dyeRes: 2048, curlRes: 768, particles: 983040, dpr: 1.75, iterations: 24, fluid: { velRes: 352, dpr: 2 } },
+  ultra: { velRes: 256, dyeRes: 2560, curlRes: 1024, particles: 4489216, dpr: 4, iterations: 24 },
+  // alte Startwerte (v0.4), weiter wählbar
+  phone04: { velRes: 96, dyeRes: 384, curlRes: 256, particles: 262144, dpr: 1 },
+  high04: { velRes: 192, dyeRes: 1024, curlRes: 768, particles: 4194304, dpr: 1.75 },
+  ultra04: { velRes: 256, dyeRes: 1536, curlRes: 1024, particles: 8388608, dpr: 2 },
 };
 
 // ---------------------------------------------------------------------------
@@ -181,7 +206,7 @@ const OFF_STORMS = OFF_BANDS + TABLE * 4;
 const OFF_INFO = OFF_STORMS + MAX_STORMS * 4;
 const OFF_WEIGHT = OFF_INFO + MAX_STORMS * 4;
 const SIM_FLOATS = OFF_WEIGHT + MAX_STORMS;
-const RENDER_FLOATS = 16 + 4 * 12;
+const RENDER_FLOATS = 16 + 4 * 15;
 // Fester Zeitschritt: Zeitraffer und Einschwingen machen mehr Schritte, nicht größere.
 const DT = 1 / 60;
 // Vorrechnen beim Start (unsichtbar, hinter dem Ladebild): 20 s Simulationszeit, damit der
@@ -295,7 +320,7 @@ class App {
 
     this.dummy = this.cubeField(8);
     this.zonal = device.createBuffer({ size: 128 * 2 * 4, usage: GPUBufferUsage.STORAGE });
-    this.applyQuality(false);
+    this.applyQuality(true);  // Startwerte der Geräteklasse schon beim Laden
     this.applyPreset();
     this.buildUI();
     this.bindInput();
@@ -340,8 +365,12 @@ class App {
 
   private applyQuality(fromUI: boolean) {
     const q = QUALITY[S.quality];
-    if (fromUI && q) { S.velRes = q.velRes; S.dyeRes = q.dyeRes; S.curlRes = q.curlRes; S.particles = q.particles; }
-    if (fromUI && q) S.pixelDensity = Math.min(q.dpr, 2);
+    if (fromUI && q) {
+      const f = S.look === 'dye' && q.fluid ? q.fluid : null;
+      S.velRes = f ? f.velRes : q.velRes; S.dyeRes = q.dyeRes; S.curlRes = q.curlRes; S.particles = q.particles;
+      S.pixelDensity = f ? f.dpr : q.dpr;
+      if (q.iterations) S.iterations = q.iterations;
+    }
     this.dpr = S.pixelDensity;
     this.allocVel();
     this.allocDye();
@@ -683,6 +712,17 @@ class App {
     return this.storms.filter((s) => s.kick > 0 || S.storms).slice(0, MAX_STORMS);
   }
 
+  /** Hauptsturm (größter nicht-polarer Vorlagen-Sturm) auf die Tagseite vor die Kamera drehen, etwas vor der
+   *  Bildmitte in Drehrichtung, damit er über die Tagseite wandert. Neigung wird vernachlässigt. */
+  private faceMainStorm() {
+    if (!S.focusStorm) return;
+    let main: Storm | null = null;
+    this.storms.forEach((st, i) => { if (i < this.preset.storms.length && Math.abs(st.lat) < 70 && (!main || st.radius > main.radius)) main = st; });
+    if (!main) return;
+    const camAz = Math.PI / 2 - this.cam.yaw;
+    this.spin = ((main as Storm).lon * Math.PI) / 180 - (camAz + 0.3 * this.dir());
+  }
+
   /** Stürme bewegen, neue entstehen lassen, abgelaufene entfernen. */
   private updateStorms(dt: number) {
     for (const s of this.storms) {
@@ -745,7 +785,10 @@ class App {
       w / h, this.time, S.exposure, S.dyeRes,
       rc[0], rc[1], rc[2], 0.6,
       1 / Math.max(S.jetStrength, 1e-4), (2 * Math.tan((16 * Math.PI) / 180)) / h, this.sky.ready ? this.sky.n : 0, S.nebula,
-      S.stars, 0, 0, 0,
+      S.stars, S.reliefMulti ? S.reliefCoarse : 0, S.reliefFine, S.reliefAdapt ? 1 : 0,
+      S.depthOn ? 1 : 0, S.depthStrength, S.depthSource === 'pressure' && this.flowMode() === 'fluid' ? 0 : 1, S.velRes,
+      S.pomOn ? 1 : 0, S.pomHeight, S.pomShadow, S.reliefSize,
+      ({ v04: 0, off: 1, soft: 2 } as Record<string, number>)[S.twilight] ?? 0, ({ v04: 0, soft: 1, off: 2 } as Record<string, number>)[S.rimGlow] ?? 0, 0, 0,
     ], 16);
     this.device.queue.writeBuffer(this.renderBuf, 0, d);
   }
@@ -1043,9 +1086,77 @@ class App {
     this.warmTotal = this.warm;
     this.warmStart = performance.now();
     this.manualSkip = false;
+    const fresh = this.needsInit;
     this.needsInit = false;
     this.needsDye = false;
     showLoading(true);
+    this.restored = false;
+    if (fresh && S.remember) void this.loadState();
+  }
+
+  // ---------- Modul „Zustand merken“ (IndexedDB, nur in diesem Browser) ----------
+  private restored = false;
+  private static VIEW_ONLY = new Set(['sunAngle', 'relief', 'limb', 'atmosphere', 'exposure', 'nebula', 'stars', 'spinSpeed', 'view', 'map',
+    'paused', 'timeScale', 'pixelDensity', 'autoQuality', 'quality', 'reliefMulti', 'reliefCoarse', 'reliefFine', 'reliefSize', 'reliefAdapt',
+    'depthOn', 'depthStrength', 'depthSource', 'pomOn', 'pomHeight', 'pomShadow', 'twilight', 'rimGlow', 'remember', 'focusStorm', 'seamless']);
+  /** Schlüssel: alle Regler, die die Rechnung beeinflussen, plus Lauf-Nummer. Andere Werte = anderer Zustand. */
+  private stateKey(): string {
+    const o: Record<string, unknown> = { run: this.runSeed, warm: this.warmSteps };
+    for (const [k, v] of Object.entries(S)) if (!App.VIEW_ONLY.has(k)) o[k] = v;
+    return JSON.stringify(o);
+  }
+  private db(): Promise<IDBDatabase> {
+    return new Promise((res, rej) => {
+      const q = indexedDB.open('procedural-planets', 1);
+      q.onupgradeneeded = () => q.result.createObjectStore('state');
+      q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+    });
+  }
+  private fieldsToKeep(): CubeField[] {
+    return [this.vel[this.vc], this.prs[this.pc], this.dye[this.dc], this.flow].filter((f): f is CubeField => !!f);
+  }
+  private async readField(f: CubeField): Promise<ArrayBuffer> {
+    const bpr = Math.ceil((f.n * 8) / 256) * 256;
+    const buf = this.device.createBuffer({ size: bpr * f.n * 6, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = this.device.createCommandEncoder();
+    enc.copyTextureToBuffer({ texture: f.tex }, { buffer: buf, bytesPerRow: bpr, rowsPerImage: f.n }, [f.n, f.n, 6]);
+    this.device.queue.submit([enc.finish()]);
+    await buf.mapAsync(GPUMapMode.READ);
+    const out = buf.getMappedRange().slice(0);
+    buf.destroy();
+    return out;
+  }
+  private async saveState() {
+    if (!S.remember || this.offscreen) return;
+    try {
+      const key = this.stateKey();
+      const fields = await Promise.all(this.fieldsToKeep().map((f) => this.readField(f)));
+      const db = await this.db();
+      const tx = db.transaction('state', 'readwrite');
+      const st = tx.objectStore('state');
+      st.clear();  // nur den letzten Zustand behalten (Speicherplatz)
+      st.put({ fields, time: this.time, storms: this.storms, vc: this.vc, pc: this.pc, dc: this.dc }, key);
+    } catch (e) { console.warn('Zustand merken:', e); }
+  }
+  private async loadState() {
+    try {
+      const key = this.stateKey();
+      const db = await this.db();
+      const rec = await new Promise<any>((res, rej) => { const q = db.transaction('state').objectStore('state').get(key); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+      if (!rec || key !== this.stateKey()) return;
+      const fs = this.fieldsToKeep();
+      if (rec.fields.length !== fs.length) return;
+      fs.forEach((f, i) => {
+        const bpr = Math.ceil((f.n * 8) / 256) * 256;
+        if (rec.fields[i].byteLength !== bpr * f.n * 6) throw new Error('size');
+        this.device.queue.writeTexture({ texture: f.tex }, rec.fields[i], { bytesPerRow: bpr, rowsPerImage: f.n }, [f.n, f.n, 6]);
+      });
+      this.time = rec.time; this.storms = rec.storms;
+      this.restored = true;
+      this.warm = 0; this.warmTotal = 0;
+      showLoading(false);
+      this.faceMainStorm();
+    } catch (e) { console.warn('Zustand laden:', e); }
   }
 
   /** Vorrechnen: viele Schritte ohne Rendern, GPU-Zeit messen, Qualität kalibrieren. */
@@ -1066,7 +1177,7 @@ class App {
     }
     loadBar.style.width = `${Math.round((100 * (this.warmTotal - this.warm)) / Math.max(this.warmTotal, 1))}%`;
     fpsEl.textContent = '– fps';
-    if (this.warm === 0) { showLoading(false); this.manualSkip = false; }
+    if (this.warm === 0) { showLoading(false); this.manualSkip = false; if (!this.restored) void this.saveState(); this.faceMainStorm(); }
   }
 
   /** Einmal pro Start: passt ein Simulationsschritt nicht ins Budget, eine Stufe herunter. */
@@ -1259,7 +1370,7 @@ class App {
     const fx = (f: string) => `<code class="fx">${f}</code>`;
     const presetName = (name: string) => ({ Neptun: t('Neptun', 'Neptune'), 'Heißer Jupiter': t('Heißer Jupiter', 'Hot Jupiter') } as Record<string, string>)[name] ?? name;
     // Alle Regler gehen immer bis zum Maximum; "Gerät" setzt nur die Startwerte.
-    const lim = QUALITY.ultra.max;
+    const lim = { velRes: 1024, dyeRes: 8192, curlRes: 4096, particles: 67108864 };
 
     this.panel = new Panel(root, S as unknown as Record<string, number | string | boolean>, on, DEFAULTS as unknown as Record<string, number | string | boolean>);
     this.panel
@@ -1339,6 +1450,12 @@ class App {
       .toggle('storms', t('Vorlagen-Stürme', 'Preset storms'),
         t('Setzt die bekannten Stürme der Vorlage (z. B. Großer Roter Fleck) beim Start als Wirbel ein.',
           'Seeds the preset’s known storms (e.g. the Great Red Spot) as vortices at start.') + fx(t('v(d) = 2,33 · x·e<sup>−x²</sup>,  x = d / r', 'v(d) = 2.33 · x·e<sup>−x²</sup>,  x = d / r')))
+      .toggle('remember', t('Zustand merken', 'Remember state'),
+        t('Modul. Speichert den fertig eingeschwungenen Planeten in diesem Browser. Beim nächsten Laden mit denselben Einstellungen ist er sofort da, ohne Einschwingen. Nur der letzte Zustand wird behalten; je nach Farbauflösung braucht er 10 bis 200 MB Speicher im Browser.',
+          'Module. Saves the fully spun-up planet in this browser. Next time with the same settings it appears instantly, without spin-up. Only the latest state is kept; depending on colour resolution it needs 10 to 200 MB of browser storage.'))
+      .toggle('focusStorm', t('Start mit Hauptsturm im Blick', 'Start with main storm in view'),
+        t('Dreht den Planeten nach dem Laden so, dass der größte Sturm der Vorlage (bei Jupiter der Große Rote Fleck) am Anfang der Tagseite vor der Kamera steht.',
+          'After loading, turns the planet so the preset’s largest storm (Jupiter: the Great Red Spot) sits at the start of the day side in front of the camera.'))
       .range('stormSize', t('Sturm-Größe', 'Storm size'), 0.2, 5, 0.05,
         t('Radius aller Stürme als Faktor, unabhängig vom Drehtempo. Groß und langsam ist so möglich: große Sturm-Größe, kleines Drehtempo.',
           'Radius of all storms as a factor, independent of spin speed. Big and slow is possible: large storm size, low spin speed.') + fx('r′ = r · Faktor'), (v) => `${v.toFixed(2)}×`)
@@ -1387,12 +1504,37 @@ class App {
       .range('viewFocus', t('Sichtfeld-Anteil', 'View focus'), 0, 0.95, 0.05,
         t('Anteil der Partikel, die auf der sichtbaren Seite geboren werden. Bei 0,8 landen 80 % der Rechenarbeit dort, wo du hinschaust: schärfer beim Heranzoomen, gleiche Kosten. Die Rückseite verblasst dann langsamer als sie bemalt wird; zu hoch gewählt wirkt sie beim Drehen blasser.',
           'Share of particles born on the visible side. At 0.8, 80 % of the work lands where you look: sharper when zooming in, same cost. The far side then gets painted less; set too high it looks paler when it turns into view.'), pct)
-      .section(t('Licht und Ansicht', 'Light and view'), undefined, true)
-      .range('sunAngle', t('Sonnenstand', 'Sun angle'), -180, 180, 1,
-        t('Richtung der Sonne. 0° = Sonne hinter der Kamera (voller Planet), 90° = Halbphase.', 'Sun direction. 0° = sun behind the camera (full disc), 90° = half phase.'), (v) => `${v}°`)
+      .section('Relief', t('Relief und die Relief-Module. Alle Module sind einzeln schaltbar, aus = wie v0.4.', 'Relief and the relief modules. Each module is a switch; off = as v0.4.'), true)
       .range('relief', 'Relief', 0, 5, 0.01,
         t('Neigt die Flächennormale nach der Helligkeit: helle Wolken wirken höher und werfen weiche Schatten. Das ist eine Beleuchtungs-Täuschung, keine echte Höhe (keine Parallaxe, keine Silhouette).',
           'Tilts the surface normal by brightness: bright clouds look higher and cast soft shading. This is a lighting trick, not real height (no parallax, no silhouette).') + fx(t('n′ = normalize(n − ∇Helligkeit · Relief · 3)', 'n′ = normalize(n − ∇brightness · relief · 3)')), f2)
+      .toggle('reliefMulti', t('Mehrstufiges Relief', 'Multi-scale relief'),
+        t('Modul, aus = wie bisher. Nimmt die Höhe aus der Helligkeit in drei Größen: große Wirbel und Bänder bekommen viel Tiefe, feine Krümel und Partikel wenig. Die Stärke insgesamt bleibt der Regler „Relief“.',
+          'Module, off = as before. Takes height from brightness at three sizes: big vortices and bands get a lot of depth, fine crumbs and particles little. Overall strength stays the “Relief” control.') + fx('∇h = f·∇L(e₀) + g·½(∇L̄(4e₀) + ∇L̄(16e₀))'))
+      .range('reliefCoarse', t('Grobe Stufen', 'Coarse levels'), 0, 5, 0.05, t('Tiefe der großen Strukturen (Wirbel, Bänder).', 'Depth of large structures (vortices, bands).'), f2)
+      .range('reliefFine', t('Feine Stufe', 'Fine level'), 0, 1, 0.01, t('Anteil der feinsten Stufe. 1 = so stark wie das bisherige Relief, 0 = keine Krümel.', 'Share of the finest level. 1 = as strong as the old relief, 0 = no crumbs.'), f2)
+      .range('reliefSize', t('Größe der groben Stufen', 'Coarse level size'), 0.25, 4, 0.05, t('Wie groß die groben Stufen greifen.', 'How wide the coarse levels reach.'), f2)
+      .toggle('reliefAdapt', t('An Pixelgröße anpassen', 'Adapt to pixel size'),
+        t('Die feinste Stufe ist nie kleiner als ein Bildschirmpixel. Nimmt das Krabbeln und Flimmern aus der Ferne.', 'The finest level is never smaller than a screen pixel. Removes crawling and flicker from afar.'))
+      .toggle('depthOn', t('Tiefe aus der Physik', 'Depth from physics'),
+        t('Modul, zusätzlich zum Relief. Hochdruck-Wirbel wie der Große Rote Fleck wölben sich, Tiefdruck-Wirbel sind Senken (Juno: der Fleck ist ein flacher Pfannkuchen, 300–500 km tief). Die Partikel gehen nicht ein, darum kein Krabbeln.',
+          'Module, on top of the relief. High-pressure vortices like the Great Red Spot bulge, low-pressure ones are dips (Juno: the spot is a flat pancake, 300–500 km deep). Particles do not enter, so no crawling.') + fx('h = p  oder  h = −ζ / f,  f ∝ sin φ'))
+      .select('depthSource', t('Quelle der Tiefe', 'Depth source'), [['pressure', t('Druck (nur Stable Fluids, sonst Wirbelstärke)', 'Pressure (Stable Fluids only, else vorticity)')], ['vorticity', t('Wirbelstärke aus dem Wind (beide Modelle)', 'Vorticity from the wind (both models)')]],
+        t('Druck gibt es nur im Rechenmodell Stable Fluids. Bei Curl-Noise wird automatisch die Wirbelstärke genommen, die aus dem Wind beider Modelle berechnet wird.', 'Pressure exists only in the Stable Fluids model. With curl noise the vorticity is used automatically; it is computed from the wind of both models.'))
+      .range('depthStrength', t('Tiefe', 'Depth'), 0, 10, 0.05, t('Wie stark die Wirbel sich wölben oder einsinken.', 'How strongly vortices bulge or sink.'), f2)
+      .toggle('pomOn', t('Parallaxe mit Eigenschatten', 'Parallax with self-shadow'),
+        t('Modul, zusätzlich. Verfolgt den Sichtstrahl in die Höhenkarte (Helligkeit plus Tiefe aus der Physik, falls an): hohe Stellen verdecken tiefe, Wirbelränder werfen Schatten in den Trichter. Kostet mehr Rechenleistung.',
+          'Module, on top. Traces the view ray into the height map (brightness plus depth from physics, if on): high parts hide low ones, vortex rims cast shadows into the funnel. Costs more GPU.') + fx('Parallax Occlusion Mapping (Tatarchuk 2006)'))
+      .range('pomHeight', t('Parallaxe-Höhe', 'Parallax height'), 0, 10, 0.05, t('Wie hoch die Höhenkarte für die Parallaxe ist.', 'How tall the height map is for parallax.'), f2)
+      .range('pomShadow', t('Eigenschatten', 'Self-shadow'), 0, 2, 0.05, t('Wie dunkel die Schatten in den Senken werden.', 'How dark shadows in the dips get.'), f2)
+      .section(t('Licht und Ansicht', 'Light and view'), undefined, true)
+      .range('sunAngle', t('Sonnenstand', 'Sun angle'), -180, 180, 1,
+        t('Richtung der Sonne. 0° = Sonne hinter der Kamera (voller Planet), 90° = Halbphase.', 'Sun direction. 0° = sun behind the camera (full disc), 90° = half phase.'), (v) => `${v}°`)
+      .select('twilight', t('Dämmerung', 'Twilight'), [['v04', t('wie v0.4 (Streifen)', 'as v0.4 (stripe)')], ['soft', t('weich, nach Atmosphäre', 'soft, by atmosphere')], ['off', t('aus', 'off')]],
+        t('Aufhellung hinter der Tag-Nacht-Grenze. v0.4: fester Buckel, sieht wie eine Kraterlinie aus. Weich: fällt nur ab, ohne Stufe, so stark wie die Atmosphäre. Aus: nur Sonnenlicht.',
+          'Brightening past the day–night line. v0.4: fixed bump that looks like a crater line. Soft: only falls off, no step, as strong as the atmosphere. Off: sunlight only.'))
+      .select('rimGlow', t('Randschimmer', 'Rim glow'), [['v04', t('wie v0.4', 'as v0.4')], ['soft', t('weich', 'soft')], ['off', t('aus', 'off')]],
+        t('Atmosphären-Schimmer am Planetenrand auf der Sonnenseite.', 'Atmosphere glow at the planet edge on the sun side.'))
       .range('limb', t('Randverdunkelung', 'Limb darkening'), 0.8, 2, 0.01,
         t('Minnaert-Exponent k. 1 = matte Kugel; höher = dunkler Rand wie bei echten Gasplaneten.', 'Minnaert exponent k. 1 = matte sphere; higher = darker limb, as on real gas giants.') + fx('I = (n·l)<sup>k</sup> · (n·v)<sup>k−1</sup>'), f2)
       .range('atmosphere', t('Dunstsaum', 'Haze rim'), 0, 6, 0.05, t('Helligkeit des Atmosphärensaums am Planetenrand.', 'Brightness of the atmospheric rim at the planet’s edge.') + fx(t('Saum = e<sup>−h/0,025</sup>', 'rim = e<sup>−h/0.025</sup>')), f2)
@@ -1412,6 +1554,9 @@ class App {
         ['standard', t('Laptop / integrierte GPU', 'Laptop / integrated GPU')],
         ['high', t('Desktop-GPU', 'Desktop GPU')],
         ['ultra', t('High-End-GPU (z. B. RTX 4080/5080)', 'High-end GPU (e.g. RTX 4080/5080)')],
+        ['phone04', t('Smartphone (alte Werte v0.4)', 'Smartphone (old v0.4 values)')],
+        ['high04', t('Desktop-GPU (alte Werte v0.4)', 'Desktop GPU (old v0.4 values)')],
+        ['ultra04', t('High-End-GPU (alte Werte v0.4)', 'High-end GPU (old v0.4 values)')],
       ],
         t('Setzt Startwerte für Gitter, Farbauflösung, Partikelzahl und Render-Auflösung. Die Regler selbst gehen immer bis zum Maximum (32 Mio. Partikel, 2048² Farbe, 384² Gitter), egal welches Gerät gewählt ist.',
           'Sets starting values for grid, colour resolution, particle count and render resolution. The controls always go to the maximum (32 M particles, 2048² colour, 384² grid), whatever device is chosen.'))
@@ -1492,6 +1637,7 @@ class App {
   }
 
   /** Steckbrief oben links: bekannte Werte des Planeten (bei Zufallsplaneten plausibel geschätzt). */
+  static factsOpen = false;
   private updateInfo() {
     const info = document.getElementById('planet-info');
     if (!info) return;
@@ -1517,8 +1663,13 @@ class App {
     rows.push([t('Abplattung', 'Oblateness'), nf(p.oblateness, 3)]);
     rows.push([t('Stürme', 'Storms'), String(p.storms.length)]);
     const esc = (x: string) => x.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' } as Record<string, string>)[c]);
-    info.innerHTML = `<div class="facts-name">${esc(p.name)}${f?.note ? ` <span>· ${esc(t(f.note[0], f.note[1]))}</span>` : ''}</div>`
-      + `<dl class="facts">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
+    // Kurzfassung (Durchmesser, Tag) immer sichtbar, alles weitere erst aufgeklappt, damit der Planet frei bleibt
+    const short = rows.filter(([k]) => k === t('Durchmesser', 'Diameter') || k === t('Tag', 'Day'));
+    const shown = App.factsOpen ? rows : short;
+    info.innerHTML = `<div class="facts-name">${esc(p.name)}${f?.note && App.factsOpen ? ` <span>· ${esc(t(f.note[0], f.note[1]))}</span>` : ''}`
+      + ` <button type="button" class="facts-more" aria-expanded="${App.factsOpen}">${App.factsOpen ? t('weniger ▴', 'less ▴') : t('mehr ▾', 'more ▾')}</button></div>`
+      + `<dl class="facts${App.factsOpen ? '' : ' short'}">${shown.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
+    info.querySelector('.facts-more')?.addEventListener('click', () => { App.factsOpen = !App.factsOpen; this.updateInfo(); });
   }
 
   private updateVisibility() {
@@ -1603,11 +1754,12 @@ class App {
         break;
       }
       case 'contrast': this.writeTables(); break;
+      case 'remember': try { localStorage.setItem('fgp-remember', S.remember ? '1' : '0'); } catch { /* gesperrt */ } if (S.remember && this.warm === 0) void this.saveState(); break;
       case 'fineStripes': this.needsDye = true; break;
       case 'velRes': case 'curlRes': this.allocVel(); break;
       case 'dyeRes': this.allocDye(); break;
       case 'particles': this.allocParticles(); break;
-      case 'flow': case 'look': this.updateVisibility(); this.needsDye = true; break;
+      case 'flow': case 'look': if (key === 'look') { const o = Object.values(EDDY_BY_LOOK); if (o.includes(S.eddyStrength)) S.eddyStrength = EDDY_BY_LOOK[S.look] ?? S.eddyStrength; if (Object.values(RELIEF_BY_LOOK).includes(S.relief)) S.relief = RELIEF_BY_LOOK[S.look] ?? S.relief; this.panel.refresh(); } this.updateVisibility(); this.needsDye = true; if (key === 'look' && QUALITY[S.quality]?.fluid) { this.applyQuality(true); this.panel.refresh(); } break;
       case 'retro': this.usePreset(this.preset); this.needsInit = true; break;
       case 'seamless': this.buildPipes(S.seamless); break;
       case 'map': canvas.classList.toggle('map', S.map); break;
@@ -1631,4 +1783,5 @@ declare global {
   }
 }
 
-start().catch((e) => fail(`${t('<b>Start fehlgeschlagen:</b>', '<b>Start failed:</b>')} ${e instanceof Error ? e.message : String(e)}`));
+/** Startet den Gasriesen (von der gemeinsamen Seite aufgerufen). */
+export const run = () => start().catch((e) => fail(`${t('<b>Start fehlgeschlagen:</b>', '<b>Start failed:</b>')} ${e instanceof Error ? e.message : String(e)}`));

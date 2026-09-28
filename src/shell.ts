@@ -4,9 +4,36 @@ import { t } from './i18n';
 // Jeder Planetentyp ist ein Modul mit eigener Seite; Menü, Stil und Bedienung sind dieselben.
 export type PlanetKind = 'gas' | 'rocky';
 
-const PAGES: { kind: PlanetKind; file: string; de: string; en: string }[] = [
+// Alle Körper laufen in einer Seite (index.html?body=…). Noch nicht gebaute Typen stehen ausgegraut da,
+// mit dem Plan, welche Module sie bekommen.
+const PAGES: { kind: string; file: string; de: string; en: string; soon?: [string, string] }[] = [
   { kind: 'gas', file: 'index.html', de: 'Gasriese', en: 'Gas giant' },
-  { kind: 'rocky', file: 'planets.html', de: 'Gesteinsplanet', en: 'Rocky planet' },
+  { kind: 'rocky', file: 'index.html?body=rocky', de: 'Gesteinsplanet', en: 'Rocky planet' },
+  { kind: 'moon', file: '', de: 'Mond', en: 'Moon', soon: [
+    'Kommt später. Module: Gelände + Krater + Seed aus dem Gesteinsplaneten, ohne Meer, Wolken, Flüsse. Kreist um einen Gasriesen (z. B. Jupiters 92 Monde, bei jedem Laden gleich).',
+    'Coming later. Modules: terrain + craters + seed from the rocky planet, no sea, clouds or rivers. Orbits a gas giant (e.g. Jupiter’s 92 moons, identical on every load).'] },
+  { kind: 'asteroid', file: '', de: 'Asteroid', en: 'Asteroid', soon: [
+    'Kommt später. Module: unregelmäßige Form + Krater + Seed + Gesteinsfarbe. Keine Atmosphäre.',
+    'Coming later. Modules: irregular shape + craters + seed + rock colour. No atmosphere.'] },
+  { kind: 'lava', file: '', de: 'Lavaplanet', en: 'Lava planet', soon: [
+    'Kommt später. Module: Gelände + Vulkane aus dem Gesteinsplaneten, Lava statt Meer, glühende Risse, dünne Atmosphäre.',
+    'Coming later. Modules: terrain + volcanoes from the rocky planet, lava instead of sea, glowing cracks, thin atmosphere.'] },
+];
+
+/** Welcher Körper diese Seite zeigt (?body=rocky, sonst Gasriese). */
+export function currentBody(): PlanetKind {
+  return new URLSearchParams(location.search).get('body') === 'rocky' ? 'rocky' : 'gas';
+}
+// Eingefrorene Versionen: ['' = aktuell] + Dateien in demo/
+const VERSIONS: [string, string, string][] = [
+  ['', 'aktuell', 'current'],
+  ['gas-v0.1.html', 'Gasriese v0.1 (eingefroren)', 'Gas giant v0.1 (frozen)'],
+  ['gas-v0.4.html', 'Gasriese v0.4 (eingefroren)', 'Gas giant v0.4 (frozen)'],
+  ['planets-v21.html', 'Gesteinsplanet v21: Wolken an Bergen (eingefroren)', 'Rocky planet v21: clouds at mountains (frozen)'],
+  ['planets-v22.html', 'Gesteinsplanet v22: Kantenfix/Quadtree (eingefroren)', 'Rocky planet v22: edge fix/quadtree (frozen)'],
+  ['planets-v23.html', 'Gesteinsplanet v23: erste Flüsse + Vulkane (eingefroren)', 'Rocky planet v23: first rivers + volcanoes (frozen)'],
+  ['planets-v24.html', 'Gesteinsplanet v24 (eingefroren)', 'Rocky planet v24 (frozen)'],
+  ['planets-v25.html', 'Gesteinsplanet v25 (eingefroren)', 'Rocky planet v25 (frozen)'],
 ];
 const ONLINE = 'https://loveascent.github.io/procedural-planets/demo/';
 
@@ -24,12 +51,41 @@ export function initShell(current: PlanetKind) {
     nav.setAttribute('aria-label', t('Planetentyp', 'Planet type'));
     nav.innerHTML = '';
     for (const p of PAGES) {
+      if (p.soon) {
+        const g = document.createElement('span');
+        g.textContent = t(p.de, p.en);
+        g.className = 'soon';
+        g.title = t(...p.soon);
+        g.setAttribute('aria-disabled', 'true');
+        nav.append(g);
+        continue;
+      }
       const a = document.createElement('a');
       a.textContent = t(p.de, p.en);
       a.href = pageHref(p.file);
       if (p.kind === current) a.setAttribute('aria-current', 'page');
       nav.append(a);
     }
+  }
+  // Versionsschalter: eingefrorene Stände, die gut waren (fertige Einzeldateien in demo/, werden nie neu gebaut)
+  const head = nav?.parentElement;
+  if (head && !document.getElementById('ver-switch')) {
+    const sel = document.createElement('select');
+    sel.id = 'ver-switch';
+    sel.setAttribute('aria-label', t('Version', 'Version'));
+    sel.style.cssText = 'width: auto; flex: 0 1 7.5em; min-width: 0;';
+    head.insertBefore(sel, document.getElementById('lang'));
+    sel.addEventListener('change', () => { if (sel.value) location.href = pageHref(sel.value); });
+  }
+  const vs = document.getElementById('ver-switch') as HTMLSelectElement | null;
+  if (vs) {
+    vs.innerHTML = '';
+    for (const [file, de, en] of VERSIONS) {
+      const o = document.createElement('option');
+      o.value = file; o.textContent = t(de, en);
+      vs.append(o);
+    }
+    vs.value = '';
   }
   const lb = document.getElementById('lang');
   if (lb) lb.textContent = t('EN', 'DE');
