@@ -1,2 +1,6 @@
 node_modules/
 dist/
+werkzeug/bild/referenz/
+werkzeug/bild/neu/
+werkzeug/gas/referenz/
+werkzeug/gas/neu/

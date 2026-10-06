@@ -1,0 +1,17 @@
+Bildprüfung Gesteinsplanet – so wird nach jeder Änderung geprüft (nur RTX 5080, nie die iGPU)
+
+1) Statisch:   node werkzeug/statisch.mjs                       (undefinierte Namen nach Schnitten)
+2) Bauen:      npx vite build
+3) Server:     npx vite preview --port 5202 --strictPort        (im Hintergrund)
+4) Bilder:     node werkzeug/bild/bild.mjs http://localhost:5202/ werkzeug/bild/neu
+               20 feste Szenen (szenen.mjs), feste Zeit/Drehung/Kamera; bricht ab, wenn der Adapter nicht NVIDIA ist
+5) Vergleich:  python werkzeug/bild/vergleich.py werkzeug/bild/referenz werkzeug/bild/neu sammel.png
+               EIN Sammelbild (A | B | Abweichung ×8) nur für Szenen mit > 100 abweichenden Pixeln; Exit 0 = gleich
+6) Server beenden (Prozessbaum), nachsehen, dass Port frei ist.
+
+Referenz (werkzeug/bild/referenz/, nicht im Git, ~20 MB; deterministisch: zwei Läufe des Originalcodes sind bitgleich; IMMER die volle Szenenfolge in einem Lauf erzeugen, nicht einzelne Szenen – Zustand wirkt zwischen Szenen): Bilder des ORIGINAL-Codes, Stand Commit b1244a3
+(vor jedem Umbau). Neu erzeugen: `git worktree add <ordner> b1244a3`, dort node_modules kopieren (nicht verlinken),
+`npx vite build`, `vite preview`, bild.mjs wie oben. Gemessenes GPU-Rauschen: 0–46 Pixel je Szene bei gleichem Code.
+
+Wer Aussehen absichtlich ändert (neuer Baustein, anderer Standard), erzeugt die Referenz bewusst neu und sagt das dem Urheber.
+Neue Bausteine bekommen in szenen.mjs eigene Szenen (an / aus / Nahaufnahme).

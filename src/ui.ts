@@ -1,25 +1,31 @@
-import { t } from './i18n';
+import { labelOf, short, showTip, hideTip, openDetail } from './bedienung/tipps';
+import { sortRows, addSearch } from './bedienung/suche';
+import { section, row, custom, visible, disable } from './bedienung/aufbau';
+import { range } from './bedienung/regler';
+import { select } from './bedienung/auswahl';
+import { toggle } from './bedienung/schalter';
+import { buttons, file } from './bedienung/knoepfe';
 
 // Kleines Reglerpanel ohne Abhängigkeiten. Jeder Regler hat einen Erklärtext, der im
 // Kasten "Was passiert hier?" erscheint, sobald man den Regler berührt.
 
-type Settings = Record<string, number | string | boolean>;
+export type Settings = Record<string, number | string | boolean>;
 
-interface Binding { key: string; update: () => void; row: HTMLElement }
+export interface Binding { key: string; update: () => void; row: HTMLElement }
 
 export class Panel {
   static heavy = new Set(['velRes', 'dyeRes', 'curlRes', 'particles']);
-  private bindings: Binding[] = [];
-  private body: HTMLElement;
-  private tip: HTMLElement;        // kleine Blase beim Drüberfahren
-  private detail: HTMLElement;     // Erklärfenster in der Ecke (über ⓘ)
-  private current: HTMLElement | null = null;
+  bindings: Binding[] = [];
+  body: HTMLElement;
+  tip: HTMLElement;        // kleine Blase beim Drüberfahren
+  detail: HTMLElement;     // Erklärfenster in der Ecke (über ⓘ)
+  current: HTMLElement | null = null;
 
   constructor(
     root: HTMLElement,
-    private s: Settings,
-    private onChange: (key: string) => void,
-    private defaults?: Settings,
+    public s: Settings,
+    public onChange: (key: string) => void,
+    public defaults?: Settings,
   ) {
     // Blase und Erklärfenster liegen fest über der Seite und verschieben nie die Regler.
     document.getElementById('tip')?.remove();
@@ -41,247 +47,39 @@ export class Panel {
     queueMicrotask(() => { this.sortRows(); this.addSearch(); });
   }
 
-  private labelOf(row: Element): string {
-    return (row.querySelector('label')?.textContent ?? '').trim().toLocaleLowerCase();
-  }
+  labelOf(row: Element): string { return labelOf(this, row); }
 
-  /** Regler in jedem Abschnitt alphabetisch; Hinweistexte bleiben oben, Knopfzeilen unten. */
-  private sortRows() {
-    for (const d of this.body.querySelectorAll('details')) {
-      const rows = [...d.children].filter((c) => c.classList.contains('row') && !c.classList.contains('row-buttons') && c.querySelector('label'));
-      rows.sort((a, b) => this.labelOf(a).localeCompare(this.labelOf(b), undefined, { sensitivity: 'base' }));
-      const first = [...d.children].find((c) => c.tagName !== 'SUMMARY' && !c.classList.contains('note'));
-      const mark = document.createComment('');
-      d.insertBefore(mark, first ?? null);
-      for (const row of rows) d.insertBefore(row, mark);
-      mark.remove();
-    }
-  }
+  sortRows() { return sortRows(this); }
 
-  /** Suchfeld: zeigt nur Regler, deren Name mit dem Getippten beginnt („s“ → alle mit s, „sb“ → sba, sbc …). */
-  private addSearch() {
-    const box = document.createElement('input');
-    box.type = 'search';
-    box.className = 'panel-search';
-    box.placeholder = t('Regler suchen …', 'Search controls …');
-    box.setAttribute('aria-label', t('Regler suchen', 'Search controls'));
-    this.body.prepend(box);
-    const opened = new Map<HTMLDetailsElement, boolean>();
-    box.addEventListener('input', () => {
-      const q = box.value.trim().toLocaleLowerCase();
-      for (const d of this.body.querySelectorAll('details')) {
-        if (!opened.has(d)) opened.set(d, d.open);
-        let any = false;
-        for (const row of d.querySelectorAll<HTMLElement>(':scope > .row')) {
-          const hit = !q || (!!row.querySelector('label') && this.labelOf(row).startsWith(q));
-          row.classList.toggle('search-hide', !hit);
-          any ||= hit;
-        }
-        for (const n of d.querySelectorAll<HTMLElement>(':scope > .note')) n.classList.toggle('search-hide', !!q);
-        d.classList.toggle('search-hide', !!q && !any);
-        d.open = q ? any : opened.get(d) ?? d.open;
-      }
-      if (!q) opened.clear();
-    });
-  }
+  addSearch() { return addSearch(this); }
 
-  /** Kurzfassung: erster Satz, ohne Formel. */
-  private short(hint: string): string {
-    const plain = hint.replace(/<code[\s\S]*?<\/code>/g, '').replace(/<[^>]+>/g, '');
-    const m = plain.match(/^.*?[.!?](\s|$)/);
-    return (m ? m[0] : plain).trim();
-  }
+  short(hint: string): string { return short(this, hint); }
 
-  private showTip(anchor: HTMLElement, text: string) {
-    const r = anchor.getBoundingClientRect();
-    this.tip.textContent = text;
-    this.tip.hidden = false;
-    const w = this.tip.offsetWidth;
-    // links neben dem Panel, auf Höhe des Reglers; auf schmalen Bildschirmen darüber
-    let x = r.left - w - 10, y = r.top;
-    if (x < 8) { x = Math.max(8, r.left); y = r.top - this.tip.offsetHeight - 6; }
-    this.tip.style.left = `${x}px`;
-    this.tip.style.top = `${Math.max(8, y)}px`;
-  }
+  showTip(anchor: HTMLElement, text: string) { return showTip(this, anchor, text); }
 
-  private hideTip() { this.tip.hidden = true; }
+  hideTip() { return hideTip(this); }
 
-  private openDetail(title: string, html: string) {
-    this.detail.innerHTML = `<button type="button" class="detail-close" aria-label="${t('Schließen', 'Close')}">✕</button><h3>${title}</h3><div>${html}</div>`;
-    this.detail.hidden = false;
-    (this.detail.querySelector('.detail-close') as HTMLButtonElement).addEventListener('click', () => { this.detail.hidden = true; });
-  }
+  openDetail(title: string, html: string) { return openDetail(this, title, html); }
 
-  section(title: string, note?: string, open = true): this {
-    const d = document.createElement('details');
-    d.open = open;
-    const sum = document.createElement('summary');
-    sum.textContent = title;
-    d.append(sum);
-    if (note) {
-      const p = document.createElement('p');
-      p.className = 'note';
-      p.textContent = note;
-      d.append(p);
-    }
-    this.body.append(d);
-    this.current = d;
-    return this;
-  }
+  section(title: string, note?: string, open = true): Panel { return section(this, title, note, open); }
 
-  private row(key: string, label: string, hint: string): { row: HTMLElement; lab: HTMLLabelElement; out: HTMLOutputElement } {
-    const row = document.createElement('div');
-    row.className = 'row';
-    const lab = document.createElement('label');
-    lab.htmlFor = `ctl-${key}`;
-    lab.textContent = label;
-    const out = document.createElement('output');
-    out.htmlFor = `ctl-${key}`;
-    row.append(lab, out);
-    const reset = this.defaults && key in this.defaults ? t(' Doppelklick auf den Namen setzt nur diesen Regler zurück.', ' Double-click the name to reset just this control.') : '';
-    const info = document.createElement('button');
-    info.type = 'button';
-    info.className = 'info';
-    // Kreis mit „i“ als Vektor-Symbol, folgt der Textfarbe
-    info.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="4.8" r="1" fill="currentColor"/><path d="M8 7.2v4.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
-    info.setAttribute('aria-label', `${t('Erklärung', 'Explanation')}: ${label}`);
-    info.addEventListener('click', (e) => { e.preventDefault(); this.openDetail(label, `${hint}<p class="reset-hint">${reset}</p>`); });
-    lab.after(info);
-    const short = this.short(hint);
-    const show = () => this.showTip(row, short);
-    // Doppelklick auf den Namen: nur diesen Regler auf den Standard zurücksetzen
-    lab.addEventListener('dblclick', (e) => {
-      if (!this.defaults || !(key in this.defaults)) return;
-      e.preventDefault();
-      this.s[key] = this.defaults[key];
-      this.refresh();
-      this.onChange(key);
-    });
-    row.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') show(); });
-    row.addEventListener('pointerleave', () => this.hideTip());
-    row.addEventListener('focusin', show);
-    row.addEventListener('focusout', () => this.hideTip());
-    (this.current ?? this.body).append(row);
-    return { row, lab, out };
-  }
+  row(key: string, label: string, hint: string): { row: HTMLElement; lab: HTMLLabelElement; out: HTMLOutputElement } { return row(this, key, label, hint); }
 
-  range(key: string, label: string, min: number, max: number, step: number, hint: string, fmt: (v: number) => string = (v) => String(v)): this {
-    const { row, out } = this.row(key, label, hint);
-    const input = document.createElement('input');
-    input.type = 'range';
-    input.id = `ctl-${key}`;
-    input.min = String(min);
-    input.max = String(max);
-    input.step = String(step);
-    row.append(input);
-    const update = () => { input.value = String(this.s[key]); out.textContent = fmt(Number(this.s[key])); };
-    // Teure Regler (Auflösungen, Partikelzahl): beim Ziehen nur die Zahl zeigen, erst beim Loslassen
-    // umbauen. Sonst legt jeder Zwischenwert neue GPU-Speicher an und es ruckelt massiv.
-    const heavy = Panel.heavy.has(key);
-    input.addEventListener('input', () => {
-      out.textContent = fmt(Number(input.value));
-      if (heavy) return;
-      this.s[key] = Number(input.value); this.onChange(key);
-    });
-    if (heavy) input.addEventListener('change', () => { this.s[key] = Number(input.value); this.onChange(key); });
-    this.bindings.push({ key, update, row });
-    update();
-    return this;
-  }
+  range(key: string, label: string, min: number, max: number, step: number, hint: string, fmt: (v: number) => string = (v) => String(v)): Panel { return range(this, key, label, min, max, step, hint, fmt); }
 
-  select(key: string, label: string, options: [string, string][], hint: string): this {
-    const { row, out } = this.row(key, label, hint);
-    out.remove();
-    const sel = document.createElement('select');
-    sel.id = `ctl-${key}`;
-    for (const [value, text] of options) {
-      const o = document.createElement('option');
-      o.value = value;
-      o.textContent = text;
-      sel.append(o);
-    }
-    row.classList.add('row-select');
-    row.append(sel);
-    const update = () => { sel.value = String(this.s[key]); };
-    sel.addEventListener('change', () => {
-      const num = Number(sel.value);
-      this.s[key] = typeof this.s[key] === 'number' && !Number.isNaN(num) ? num : sel.value;
-      this.onChange(key);
-    });
-    this.bindings.push({ key, update, row });
-    update();
-    return this;
-  }
+  select(key: string, label: string, options: [string, string][], hint: string): Panel { return select(this, key, label, options, hint); }
 
-  toggle(key: string, label: string, hint: string): this {
-    const { row, lab, out } = this.row(key, label, hint);
-    out.remove();
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.id = `ctl-${key}`;
-    row.classList.add('row-toggle');
-    lab.prepend(input);
-    const update = () => { input.checked = Boolean(this.s[key]); };
-    input.addEventListener('change', () => { this.s[key] = input.checked; this.onChange(key); });
-    this.bindings.push({ key, update, row });
-    update();
-    return this;
-  }
+  toggle(key: string, label: string, hint: string): Panel { return toggle(this, key, label, hint); }
 
-  buttons(items: [string, string, () => void][], hints: Record<string, string> = {}): this {
-    const row = document.createElement('div');
-    row.className = 'row row-buttons';
-    for (const [id, text, fn] of items) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.id = id;
-      b.textContent = text;
-      b.addEventListener('click', fn);
-      if (hints[id]) {
-        b.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') this.showTip(b, this.short(hints[id])); });
-        b.addEventListener('pointerleave', () => this.hideTip());
-        b.addEventListener('focus', () => this.showTip(b, this.short(hints[id])));
-        b.addEventListener('blur', () => this.hideTip());
-      }
-      row.append(b);
-    }
-    (this.current ?? this.body).append(row);
-    return this;
-  }
+  buttons(items: [string, string, () => void][], hints: Record<string, string> = {}): Panel { return buttons(this, items, hints); }
 
-  file(id: string, label: string, hint: string, onFile: (f: File) => void): this {
-    const { row, lab, out } = this.row(id, label, hint);
-    out.remove();
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.id = `ctl-${id}`;
-    input.className = 'file';
-    lab.htmlFor = input.id;
-    row.classList.add('row-file');
-    row.append(input);
-    input.addEventListener('change', () => { if (input.files?.[0]) onFile(input.files[0]); input.value = ''; });
-    return this;
-  }
+  file(id: string, label: string, hint: string, onFile: (f: File) => void): Panel { return file(this, id, label, hint, onFile); }
 
-  /** Beliebiges eigenes Element in den aktuellen Abschnitt setzen. */
-  custom(el: HTMLElement): this {
-    (this.current ?? this.body).append(el);
-    return this;
-  }
+  custom(el: HTMLElement): Panel { return custom(this, el); }
 
-  /** Blendet Regler ein/aus, z. B. Partikel-Regler nur im Partikel-Modus. */
-  visible(key: string, on: boolean) {
-    for (const b of this.bindings) if (b.key === key) b.row.hidden = !on;
-  }
+  visible(key: string, on: boolean) { return visible(this, key, on); }
 
-  /** Regler, die im aktuellen Modus nichts bewirken: ausgegraut und nicht bedienbar. */
-  disable(key: string, off: boolean) {
-    for (const b of this.bindings) if (b.key === key) {
-      b.row.classList.toggle('off', off);
-      for (const el of b.row.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select')) el.disabled = off;
-    }
-  }
+  disable(key: string, off: boolean) { return disable(this, key, off); }
 
     refresh() {
     for (const b of this.bindings) b.update();

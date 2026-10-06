@@ -1,0 +1,17 @@
+Bildprüfung Gasriese – deterministisch, nur RTX 5080
+
+Aufruf:   node werkzeug/gas/bild.mjs <Basis-URL> <Ausgabeordner> [Filter, kommagetrennt]
+Vergleich: python werkzeug/bild/vergleich.py werkzeug/gas/referenz werkzeug/gas/neu sammel.png
+
+Wie es bitgleich wird: das Werkzeug ersetzt VOR dem Laden der Seite requestAnimationFrame (läuft nur, wenn das Werkzeug ein Bild anstößt),
+performance.now (feste Uhr), Math.random und crypto.getRandomValues (feste Folge). Der Testmodus der Seite (#offscreen&warm=120) rechnet
+einen Simulationsschritt je Bild. Regler werden über die echten Menü-Elemente gesetzt (derselbe Weg wie beim Benutzer).
+Gemessen: zwei Läufe desselben Codes sind in fast allen Szenen bitgleich (Partikel-Szenen: bis ~50 Pixel Unterschied).
+
+Referenz (werkzeug/gas/referenz/, nicht im Git): Bilder des ORIGINAL-Codes (Commit b1244a3). Neu erzeugen:
+  mkdir <ordner>; git archive b1244a3 | tar -x -C <ordner>; node_modules KOPIEREN (nicht verlinken); npx vite build; npx vite preview --port 5203
+  node werkzeug/gas/bild.mjs http://localhost:5203/ werkzeug/gas/referenz
+
+Szenen in szenen.mjs: Vorlagen (Jupiter, Saturn, Neptun, Uranus, Heißer Jupiter, Zufall), Rechenarten (Fluid, Curl), Darstellungen
+(Farbstoff, Partikel, Partikel rein), Relief-Module, Dämmerung/Rand, Ansichten, Karte, Rückwärts, und je Rechen-Baustein ein Lauf mit Wert 0
+(Jets, Coriolis, Turbulenz, Wirbelverstärkung, Reibung, BFECC, Konvektion, Sturmfarbe, Bandrückstellung, Sturmantrieb). Aus-Variante = Original mit Wert 0.

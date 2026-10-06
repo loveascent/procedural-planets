@@ -1,0 +1,42 @@
+// Feste Prüfszenen für den Gasriesen. Jede Szene: Regler (über die echten Menü-Elemente gesetzt, also derselbe Weg wie beim Benutzer),
+// danach feste Anzahl Bilder (Bildtakt vom Prüfwerkzeug gesteuert, Zufall und Uhr festgelegt) und ein Foto.
+// set: { schlüssel: wert } – Auswahlfelder: Wert als Text, Schalter: true/false, Regler: Zahl.
+// frames: Bilder nach dem Vorrechnen (im Testmodus ein Simulationsschritt je Bild).
+export const WARM = 120;           // Vorrechnen (URL #offscreen&warm=…)
+export const szenen = [
+  { name: '01-jupiter-fluessigkeit', set: {}, frames: 40 },
+  { name: '02-jupiter-curl-partikel', set: { flow: 'curl', look: 'pure' }, frames: 40 },
+  { name: '03-jupiter-fluid-partikel', set: { look: 'particles' }, frames: 40 },
+  { name: '04-saturn', set: { preset: 'Saturn' }, frames: 40 },
+  { name: '05-neptun', set: { preset: 'Neptun' }, frames: 40 },
+  { name: '06-zufallsplanet', set: { preset: 'Zufall' }, frames: 40 },
+  { name: '07-relief-mehrstufig', set: { reliefMulti: true }, frames: 40 },
+  { name: '08-tiefe-druck', set: { depthOn: true }, frames: 40 },
+  { name: '09-parallaxe-schatten', set: { pomOn: true }, frames: 40 },
+  { name: '10-daemmerung-saum-weich', set: { twilight: 'soft', rimGlow: 'soft' }, frames: 40 },
+  { name: '11-daemmerung-v04', set: { twilight: 'v04', rimGlow: 'off' }, frames: 40 },
+  { name: '12-nahtlos-exakt', set: { seamless: true }, frames: 40 },
+  { name: '13-rueckwaerts', set: { retro: true }, frames: 40 },
+  { name: '14-ansicht-druck', set: { view: '3' }, frames: 40 },
+  { name: '15-karte', set: { map: true }, frames: 40 },
+  { name: '16-ohne-sterne-nebel', set: { stars: 0, nebula: 0 }, frames: 40 },
+  { name: '17-ohne-stuerme', set: { storms: false }, frames: 40 },
+  { name: '18-curl-farbstoff', set: { flow: 'curl', look: 'dye' }, frames: 40 },
+  // --- Aus-Varianten der Rechen-Bausteine (Wert 0 bzw. aus): müssen dem Original mit Wert 0 entsprechen
+  { name: '19-jets-aus', set: { jetRelax: 0 }, frames: 40 },
+  { name: '20-coriolis-aus', set: { omega: 0 }, frames: 40 },
+  { name: '21-turbulenz-aus', set: { turbulence: 0 }, frames: 40 },
+  { name: '22-wirbelverstaerkung-aus', set: { confinement: 0 }, frames: 40 },
+  { name: '23-reibung-aus', set: { drag: 0 }, frames: 40 },
+  { name: '24-bfecc-aus', set: { bfecc: false }, frames: 40 },
+  { name: '25-feinstreifen-an', set: { fineStripes: 0.5 }, frames: 40 },
+  { name: '26-konvektion-aus', set: { convection: 0 }, frames: 40 },
+  { name: '27-sturmfarbe-aus', set: { stormTint: 0 }, frames: 40 },
+  { name: '28-bandrueckstellung-aus', set: { bandRelax: 0 }, frames: 40 },
+  { name: '29-sturmantrieb-aus', set: { storms: false, stormSpawn: 0 }, frames: 40 },
+  { name: '30-curl-partikel-weich', set: { flow: 'curl', look: 'particles' }, frames: 40 },
+  { name: '31-relief-aus', set: { relief: 0 }, frames: 40 },
+  { name: '32-atmosphaere-aus', set: { atmosphere: 0 }, frames: 40 },
+  { name: '33-uranus', set: { preset: 'Uranus' }, frames: 40 },
+  { name: '34-heisser-jupiter', set: { preset: 'Heißer Jupiter' }, frames: 40 },
+];
