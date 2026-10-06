@@ -1,7 +1,7 @@
 // Filmstreifen: Bilder in festen Abständen abgreifen und zu einem Streifen zusammensetzen.
 import type { App } from './app';
 import { t } from '../i18n';
-import { FilmOptions, Filmstrip, S } from './zustand';
+import { FilmOptions, Filmstrip } from './zustand';
 import { canvas } from './dom';
 
 /** Das nächste gezeichnete Bild als Canvas (Testmodus: aus der Offscreen-Textur). */
@@ -79,8 +79,8 @@ export async function filmstrip(app: App, o: FilmOptions = {}): Promise<Filmstri
     g.fillText(`t=${stats[k].t}s  detail ${stats[k].detail}  Δ ${stats[k].change}`, x + 5, y + 14);
   });
   g.fillStyle = '#ccc';
-  const line1 = `${app.preset.name} · ${S.flow}+${S.look} · ${S.quality} · ${S.velRes}²/${S.dyeRes}² · ${S.particles} ${t('Partikel', 'particles')} · ${app.fpsNow} fps · ${t('Zeitraffer', 'time lapse')} ${S.timeScale}×`;
-  const line2 = `jet ${S.jetStrength} · Ω ${S.omega}${S.retro ? ' retro' : ''} · conf ${S.confinement} · turb ${S.turbulence} · bandRelax ${S.bandRelax} · spawn ${S.stormSpawn}/${S.kickLife}s · relief ${S.relief} · v0.3.0`;
+  const line1 = `${app.preset.name} · ${app.S.flow}+${app.S.look} · ${app.S.quality} · ${app.S.velRes}²/${app.S.dyeRes}² · ${app.S.particles} ${t('Partikel', 'particles')} · ${app.fpsNow} fps · ${t('Zeitraffer', 'time lapse')} ${app.S.timeScale}×`;
+  const line2 = `jet ${app.S.jetStrength} · Ω ${app.S.omega}${app.S.retro ? ' retro' : ''} · conf ${app.S.confinement} · turb ${app.S.turbulence} · bandRelax ${app.S.bandRelax} · spawn ${app.S.stormSpawn}/${app.S.kickLife}s · relief ${app.S.relief} · v0.3.0`;
   g.fillText(line1, 8, h * rows + 20);
   g.fillText(line2, 8, h * rows + 42);
   return { image: sheet.toDataURL('image/png'), stats };

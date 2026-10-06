@@ -3,12 +3,14 @@ import { erzeugeSystem, STANDARD_SYSTEM } from '../../src/welt/physik/system.ts'
 import { weltSchritt, TEILSCHRITT } from '../../src/welt/physik/schritt.ts';
 import { summen, finde } from '../../src/welt/physik/koerper.ts';
 import { energie } from '../../src/welt/physik/gravitation.ts';
+import { leinhardtStewart, qSternRD, qSternGleichMasse } from '../../src/welt/physik/leinhardt.ts';
+import { DICHTE } from '../../src/welt/physik/koerper.ts';
 import { werfeAuf, planetGegenPlanet } from '../../src/welt/physik/szenarien.ts';
 
 let fehler = 0;
 const ok = (b: boolean, t: string, info = '') => { console.log((b ? 'ok    ' : 'FEHLER ') + t + (info ? '  ' + info : '')); if (!b) fehler++; };
 const lauf = (w: any, sek: number, s: any) => { for (let t = 0; t < sek; t += 1 / 60) weltSchritt(w, 1 / 60, 1, s); };
-const S = { planetenZiehen: false, kollision: true, truemmer: true };
+const S = { planetenZiehen: false, kollision: true, truemmer: true, ls12: true };
 const dist = (a: any, b: any) => Math.hypot(a.p[0] - b.p[0], a.p[1] - b.p[1], a.p[2] - b.p[2]);
 
 // 1. Bahnen bleiben stabil (Planeten um Sonne, Monde um Planeten)
@@ -103,6 +105,53 @@ const dist = (a: any, b: any) => Math.hypot(a.p[0] - b.p[0], a.p[1] - b.p[1], a.
   werfeAuf(w2, w2.koerper.find((k) => k.art === 'gestein' || k.art === 'gas')!.id, { radius: 0.4, tempo: 200, abstand: 10 });
   lauf(w2, 2, { ...S, kollision: false });
   ok(w2.ereignisse.length === 0, 'Baustein Kollision aus → keine Ereignisse');
+}
+// 8. Leinhardt & Stewart 2012: Formeln gegen sich selbst und gegen die Randfälle der Veröffentlichung
+{
+  const G = 1, rho = DICHTE, m = 100, r = Math.cbrt(m / rho / (4 / 3 * Math.PI));
+  const mt = 2 * m, rC1 = Math.cbrt((3 * mt) / (4 * Math.PI * rho));
+  const q1 = qSternRD(mt, 1, G, rho), q6 = qSternGleichMasse(rC1, G, rho, 1.9);
+  ok(Math.abs(q1 / q6 - 1) < 1e-12, 'LS12: Q*_RD (Gl. 4) = Gl. (6) für gleiche Massen', `${q1.toFixed(4)} vs ${q6.toFixed(4)}`);
+  const vKrit = Math.sqrt(8 * q1);  // zentral, gleiche Massen: Q_R = Mtot V²/8
+  const a = leinhardtStewart({ mp: m, mt: m, rp: r, rt: r, v: vKrit, b: 0, G, rho1: rho });
+  ok(Math.abs(a.mLr / mt - 0.5) < 1e-9 && a.ausgang === 'erosion', 'LS12: bei Q_R = Q* bleibt die Hälfte der Masse (Definition der Zerstörung)', `Rest ${(a.mLr / mt).toFixed(4)} ${a.ausgang}`);
+  const c = leinhardtStewart({ mp: m, mt: m, rp: r, rt: r, v: vKrit * Math.sqrt(1.8), b: 0, G, rho1: rho });
+  const d = leinhardtStewart({ mp: m, mt: m, rp: r, rt: r, v: vKrit * Math.sqrt(1.8 + 1e-6), b: 0, G, rho1: rho });
+  ok(Math.abs(c.mLr / mt - 0.1) < 1e-6 && Math.abs(d.mLr / mt - 0.1) < 1e-4, 'LS12: stetiger Übergang bei Q_R/Q* = 1,8 (Gl. 11 ↔ 12)', `${(c.mLr / mt).toFixed(5)} / ${(d.mLr / mt).toFixed(5)}`);
+  const s = leinhardtStewart({ mp: m, mt: m, rp: r, rt: r, v: vKrit * 5, b: 0, G, rho1: rho });
+  ok(s.ausgang === 'superkatastrophal' && s.mLr < 0.1 * mt, 'LS12: sehr schneller Stoß ist superkatastrophal', `${(s.mLr / mt).toFixed(4)}`);
+  const lang = leinhardtStewart({ mp: m, mt: 5 * m, rp: r, rt: r * 1.7, v: 0.2 * Math.sqrt(2 * G * 6 * m / (2.7 * r)), b: 0.1, G, rho1: rho });
+  ok(lang.ausgang === 'verschmelzen', 'LS12: langsamer Stoß verschmilzt');
+  const streif = leinhardtStewart({ mp: m, mt: 5 * m, rp: r, rt: r * 1.7, v: 6 * Math.sqrt(2 * G * 6 * m / (2.7 * r)), b: 0.95, G, rho1: rho });
+  ok(streif.ausgang === 'abprall', 'LS12: schneller streifender Stoß = Hit-and-Run', `v/vHr = ${(6 * Math.sqrt(2 * G * 6 * m / (2.7 * r)) / streif.vHr).toFixed(2)}`);
+  const streifLangsam = leinhardtStewart({ mp: m, mt: 5 * m, rp: r, rt: r * 1.7, v: 0.5 * Math.sqrt(2 * G * 6 * m / (2.7 * r)), b: 0.95, G, rho1: rho });
+  ok(streifLangsam.ausgang === 'verschmelzen', 'LS12: langsamer streifender Stoß = Graze-and-merge');
+}
+// 9. LS12 im Spiel: Erhaltung und Ausgang
+{
+  const w = erzeugeSystem({ ...STANDARD_SYSTEM, seed: 21, planeten: 5, monde: false });
+  const ziel = w.koerper.find((k) => k.art === 'gestein' || k.art === 'gas')!;
+  werfeAuf(w, ziel.id, { radius: ziel.r * 0.8, tempo: 400, abstand: ziel.r * 1.8 + 0.5 });
+  const vor = summen(w);
+  weltSchritt(w, TEILSCHRITT * 8, 1, S);
+  const nach = summen(w);
+  const dP = Math.hypot(nach.P[0] - vor.P[0], nach.P[1] - vor.P[1], nach.P[2] - vor.P[2]);
+  const ev = w.ereignisse.map((e) => e.art).join(',');
+  ok(w.truemmer.n > 0 && ev.includes('zerschlagen'), 'LS12 im Spiel: schneller großer Einschlag erzeugt Trümmer', `${w.truemmer.n} Trümmer, ${ev}`);
+  ok(Math.abs(nach.m / vor.m - 1) < 1e-12, 'LS12 im Spiel: Masse erhalten');
+  ok(dP / nach.m < 0.02, 'LS12 im Spiel: Impuls erhalten', `ΔP/M=${(dP / nach.m).toExponential(2)}`);
+}
+// 10. Keine Billard-Geschwindigkeiten: nach gezielten Einschlägen fliegt kein Körper mit absurdem Tempo davon
+{
+  let maxV = 0;
+  for (let s = 1; s <= 16; s++) {
+    const w = erzeugeSystem({ ...STANDARD_SYSTEM, seed: s, monde: s % 2 === 0 });
+    const ziel = w.koerper.find((k) => k.art === 'gestein')!;
+    werfeAuf(w, ziel.id, { radius: 0.3 + 0.2 * (s % 5), tempo: 120 + 40 * (s % 4) });
+    for (let t = 0; t < 3; t += 1 / 60) weltSchritt(w, 1 / 60, 1, S);
+    for (const k of w.koerper) if (k.art !== 'sonne') maxV = Math.max(maxV, Math.hypot(...k.v));
+  }
+  ok(maxV < 250, 'Nach Einschlägen fliegt kein Körper mit absurdem Tempo davon', `größtes Tempo ${maxV.toFixed(0)}`);
 }
 console.log(fehler ? `\n${fehler} FEHLER` : '\nalle Prüfungen bestanden');
 process.exit(fehler ? 1 : 0);

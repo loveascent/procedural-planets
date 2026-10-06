@@ -21,6 +21,11 @@ export interface Koerper {
   tilt: number;
   /** Seed für die gebackene Oberfläche */
   seed: number;
+  /** Name einer Gasriesen-Vorlage (Jupiter, Saturn …), falls im Menü des echten Planeten gewählt; sonst Zufallsplanet aus dem Seed */
+  vorlage?: string;
+  /** Zustand vor dem letzten Teilschritt (nur für die Bildinterpolation) */
+  pv: V3;
+  spinV: number;
 }
 
 /** Trümmer: Testteilchen mit eigener (kleiner) Masse; sie fühlen alle Körper, ziehen aber nicht. */
@@ -31,6 +36,8 @@ export interface Truemmer {
   v: Float64Array;
   m: Float64Array;
   /** Herkunft (Art) für die Farbe: 0 Gestein, 1 Gas/Eis, 2 Sonne/Glut */
+  /** Position vor dem letzten Teilschritt (Bildinterpolation) */
+  pv: Float64Array;
   art: Uint8Array;
   alter: Float64Array;
 }
@@ -41,7 +48,7 @@ export interface Ereignis {
   /** 0..1, relativ zum größten denkbaren Einschlag */
   staerke: number;
   text: string;
-  art: 'verschmelzen' | 'zerschlagen' | 'sonne' | 'truemmer';
+  art: 'verschmelzen' | 'zerschlagen' | 'sonne' | 'truemmer' | 'abprall';
 }
 
 export interface Welt {
@@ -68,7 +75,7 @@ export function neuerZufall(seed: number) {
 }
 
 export function neueTruemmer(max: number): Truemmer {
-  return { n: 0, max, p: new Float64Array(3 * max), v: new Float64Array(3 * max), m: new Float64Array(max), art: new Uint8Array(max), alter: new Float64Array(max) };
+  return { n: 0, max, p: new Float64Array(3 * max), pv: new Float64Array(3 * max), v: new Float64Array(3 * max), m: new Float64Array(max), art: new Uint8Array(max), alter: new Float64Array(max) };
 }
 
 export function neueWelt(seed: number, maxTruemmer = 4000): Welt {
@@ -79,8 +86,8 @@ export const DICHTE = 30;
 /** Masse aus Radius bei fester Dichte (Welteinheiten) */
 export const masseVonRadius = (r: number) => DICHTE * r * r * r;
 
-export function fuegeHinzu(w: Welt, k: Omit<Koerper, 'id'>): Koerper {
-  const kk: Koerper = { ...k, id: w.naechsteId++ };
+export function fuegeHinzu(w: Welt, k: Omit<Koerper, 'id' | 'pv' | 'spinV'>): Koerper {
+  const kk: Koerper = { ...k, id: w.naechsteId++, pv: [k.p[0], k.p[1], k.p[2]], spinV: k.spin };
   w.koerper.push(kk);
   return kk;
 }
@@ -93,14 +100,14 @@ export function fuegeTruemmerHinzu(w: Welt, p: V3, v: V3, m: number, art: number
   const t = w.truemmer;
   if (t.n >= t.max) { w.verworfen += m; return false; }
   const i = t.n++;
-  t.p.set(p, 3 * i); t.v.set(v, 3 * i); t.m[i] = m; t.art[i] = art; t.alter[i] = 0;
+  t.p.set(p, 3 * i); t.pv.set(p, 3 * i); t.v.set(v, 3 * i); t.m[i] = m; t.art[i] = art; t.alter[i] = 0;
   return true;
 }
 
 export function entferneTruemmer(t: Truemmer, i: number) {
   const l = --t.n;
   if (i !== l) {
-    t.p.copyWithin(3 * i, 3 * l, 3 * l + 3); t.v.copyWithin(3 * i, 3 * l, 3 * l + 3);
+    t.p.copyWithin(3 * i, 3 * l, 3 * l + 3); t.pv.copyWithin(3 * i, 3 * l, 3 * l + 3); t.v.copyWithin(3 * i, 3 * l, 3 * l + 3);
     t.m[i] = t.m[l]; t.art[i] = t.art[l]; t.alter[i] = t.alter[l];
   }
 }

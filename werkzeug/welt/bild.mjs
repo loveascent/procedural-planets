@@ -42,7 +42,7 @@ if (!/nvidia/i.test(vendor)) { console.error('ABBRUCH: kein NVIDIA-Adapter (nur 
 const foto = async (name) => {
   const r = await cdp('Page.captureScreenshot', { format: 'png' });
   writeFileSync(join(ausDir, name + '.png'), Buffer.from(r.result.data, 'base64'));
-  console.log('Bild', name, '|', await ausw('document.getElementById("status").textContent'));
+  console.log('Bild', name, '|', await ausw('document.getElementById("welt-status").textContent'));
 };
 // Szenen: js = Ausdruck in der Seite, danach `sek` Sekunden Echtzeit warten
 const szenen = [
@@ -51,7 +51,7 @@ const szenen = [
   ['03_innen', "welt.setzeFokus(welt.w.koerper.find(k=>k.art==='gestein').id)", 3],
   ['04_gas', "welt.setzeFokus(welt.w.koerper.find(k=>k.art==='gas').id)", 3],
   ['05_gas_mit_mond', "(() => { const m = welt.w.koerper.find(k=>k.art==='mond' && welt.w.koerper.find(p=>p.id===k.eltern).art==='gas'); const p = welt.w.koerper.find(x=>x.id===m.eltern); welt.setzeFokus(p.id, p.r*14); })()", 3],
-  ['06_einschlag_vorher', "(() => { const p = welt.w.koerper.find(k=>k.art==='gestein'); welt.ste.waehle(p.id); welt.setzeFokus(p.id, p.r*9); welt.ste.setzeTempo(0.25); welt.ste.asteroid(p.id, 120, 0.8, 'gestein'); })()", 1.25],
+  ['06_einschlag_vorher', "(() => { const p = welt.w.koerper.find(k=>k.art==='gestein'); welt.ste.waehle(p.id); welt.setzeFokus(p.id, p.r*9); welt.E.tempoLog = Math.log10(0.25); welt.wirkt('tempoLog'); welt.ste.asteroid(p.id, 120, 0.8, 'gestein'); })()", 1.25],
   ['07_einschlag', "0", 0.35],
   ['08_truemmer', "0", 1.5],
 ];

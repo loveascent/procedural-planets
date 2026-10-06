@@ -6,7 +6,7 @@ import { Preset } from '../presets';
 import { S } from './zustand';
 
 export function snapshot(a: App): string {
-  const { paused: _paused, ...rest } = S;
+  const { paused: _paused, ...rest } = a.S;
   return JSON.stringify({ v: 1, s: rest, preset: a.preset });
 }
 
@@ -42,24 +42,24 @@ export function updateUndoButtons(a: App) {
 /** Einen gespeicherten Stand anwenden; nur neu starten, wenn sich der Planet geändert hat. */
 export function restore(a: App, json: string) {
   const snap = JSON.parse(json) as { v: number; s: Partial<typeof S>; preset: Preset };
-  const prev = { ...S };
+  const prev = { ...a.S };
   const prevPreset = JSON.stringify(a.preset);
   // Codes aus v0.3.0 hatten "Schienen": in Strömung + Darstellung übersetzen.
   const old = snap.s as Partial<typeof S> & { track?: string };
   const compat: Partial<typeof S> = old.track === 'fluid' ? { flow: 'fluid', look: 'dye' } : old.track === 'particles' ? { flow: 'curl', look: 'pure' } : {};
   delete old.track;
-  Object.assign(S, old, compat, { paused: prev.paused });
-  a.buildPipes(S.seamless);
-  a.dpr = S.pixelDensity;
-  if (prev.retro !== S.retro) a.spin = -a.spin;
+  Object.assign(a.S, old, compat, { paused: prev.paused });
+  a.buildPipes(a.S.seamless);
+  a.dpr = a.S.pixelDensity;
+  if (prev.retro !== a.S.retro) a.spin = -a.spin;
   a.usePreset(snap.preset);
-  if (prev.velRes !== S.velRes || prev.curlRes !== S.curlRes) a.allocVel();
-  if (prev.dyeRes !== S.dyeRes) a.allocDye();
-  if (prev.particles !== S.particles) a.allocParticles();
-  if (prevPreset !== JSON.stringify(snap.preset) || prev.retro !== S.retro) a.needsInit = true;
-  if (prev.flow !== S.flow || prev.look !== S.look) a.needsDye = true;
-  if (prev.quality !== S.quality) { a.buildUI(); return; }
-  canvas.classList.toggle('map', S.map);
+  if (prev.velRes !== a.S.velRes || prev.curlRes !== a.S.curlRes) a.allocVel();
+  if (prev.dyeRes !== a.S.dyeRes) a.allocDye();
+  if (prev.particles !== a.S.particles) a.allocParticles();
+  if (prevPreset !== JSON.stringify(snap.preset) || prev.retro !== a.S.retro) a.needsInit = true;
+  if (prev.flow !== a.S.flow || prev.look !== a.S.look) a.needsDye = true;
+  if (prev.quality !== a.S.quality) { a.buildUI(); return; }
+  canvas.classList.toggle('map', a.S.map);
   a.updateVisibility();
   a.panel.refresh();
 }

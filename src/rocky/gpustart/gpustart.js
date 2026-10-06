@@ -6,6 +6,7 @@ import { t } from '../../i18n';
 export function createGpuStart(ext) {
   const { fail, OFFSCREEN, canvas, S, VF, COMMON, NOISE, GEN, CLOUDGEN, SKY_GEN_WGSL, TRANS, MIP, UDECL, TEXH, VOLC, VOLC_AUS, HYDRO_WARP, WELLEN, WELLEN_AUS, ATMO, ATMO_AUS, ATMO_POST, ATMO_POST_AUS, BLOOM, BLOOM_AUS, FLARE, FLARE_AUS, SCHATTEN, SCHATTEN_AUS, SAUM, SAUM_AUS, EROSION, EROSION_AUS, FLUSS_GEN, FLUSS_GEN_AUS, FLUSS_SZENE, FLUSS_SZENE_AUS, STIL_ORIGINAL, STIL_ORIGINAL_AUS, TERRASSEN, TERRASSEN_AUS, FEINDETAIL, FEINDETAIL_AUS, WASSER, WASSER_AUS, BRANDUNG, BRANDUNG_AUS, MEEREIS, MEEREIS_AUS, KAVITAET, KAVITAET_AUS, GEOMORPH, GEOMORPH_AUS, RELIEF, RELIEF_AUS, HIMMEL, HIMMEL_AUS, SONNE, SONNE_AUS, BIOM_CD, BIOM_CD_AUS, BIOM_ERDE, BIOM_ERDE_AUS, GEBIRGE, GEBIRGE_AUS, STIL_ORIGINAL_WOLKEN, STIL_ORIGINAL_WOLKEN_AUS, STIL_ORIGINAL_LEUCHTSAUM, STIL_ORIGINAL_LEUCHTSAUM_AUS, ANSICHTEN_DEBUG, ANSICHTEN_DEBUG_AUS, WOLKEN, WOLKEN_AUS, SCENE, SKY_DRAW_WGSL, POST, MSAA } = ext;
   async function initGPU() {
+    if (ext.kopflos) { ext.device = ext.kopflos.device; ext.format = 'rgba8unorm'; return; }   // eingebettet: gemeinsames Gerät der Welt
     if (!navigator.gpu) fail(t('Dieser Browser kann kein WebGPU. Bitte Chrome oder Edge ab 113, Safari ab 26 oder Firefox ab 141 nehmen.', 'This browser has no WebGPU. Please use Chrome or Edge 113+, Safari 26+ or Firefox 141+.'));
     ext.adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
     if (!ext.adapter) fail(t('Keine WebGPU-Grafikkarte gefunden.', 'No WebGPU ext.adapter found.'));

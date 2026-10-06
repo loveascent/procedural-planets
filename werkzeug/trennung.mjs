@@ -8,14 +8,14 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve, relative, dirname, sep } from 'node:path';
 const root = resolve('src/rocky');
 const frei = new Set(['logik', 'shader']);
-let fehler = 0; const ohneQuelle|Verfahren|nach  = [];
+let fehler = 0; const ohneQuelle = [];
 const walk = (d) => readdirSync(d).flatMap((x) => { const p = join(d, x); return statSync(p).isDirectory() ? walk(p) : p.endsWith('.js') ? [p] : []; });
 for (const datei of walk(root)) {
   const rel = relative(root, datei).split(sep);
   const text = readFileSync(datei, 'utf8');
   const baustein = rel.length > 1 ? rel[0] : null;
   if (rel[0] === 'shader') {
-    if (!/Quelle|Verfahren|nach |Verfahren|nach |eigene Umsetzung|Datenlayout|Quadtree|Copyright|MIT|\(19\d\d\)|\(20\d\d\)|Formel|[∂∇Σ]/.test(text.split('\n').slice(0, 14).join('\n')) ) ohneQuelle.push(rel.join('/'));
+    if (!/Quelle|Verfahren|nach |eigene Umsetzung|Datenlayout|Quadtree|Copyright|MIT|\(19\d\d\)|\(20\d\d\)|Formel|[∂∇Σ]/.test(text.split('\n').slice(0, 14).join('\n')) ) ohneQuelle.push(rel.join('/'));
     continue;
   }
   for (const m of text.matchAll(/(?:import[^'"]*?from\s*|import\s*\(\s*)['"]([^'"]+)['"]/g)) {
@@ -25,6 +25,6 @@ for (const datei of walk(root)) {
     if (baustein && ziel[0] !== baustein && !frei.has(ziel[0])) { console.log(`FEHLER ${rel.join('/')} importiert anderen Baustein: ${m[1]}`); fehler++; }
   }
 }
-if (ohneQuelle|Verfahren|nach .length) console.log('Hinweis, Shader ohne erkennbare Quelle/Formel im Kopf:\n  ' + ohneQuelle.join('\n  '));
+if (ohneQuelle.length) console.log('Hinweis, Shader ohne erkennbare Quelle/Formel im Kopf:\n  ' + ohneQuelle.join('\n  '));
 console.log(fehler ? `${fehler} Fehler` : 'OK: Bausteine importieren nur sich selbst, logik/ und shader/');
 process.exit(fehler ? 1 : 0);

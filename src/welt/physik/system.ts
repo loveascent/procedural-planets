@@ -44,7 +44,7 @@ export function erzeugeSystem(opt: SystemOptionen): Welt {
     const name = SILBEN[Math.floor(R() * SILBEN.length)] + SILBEN[Math.floor(R() * SILBEN.length)].toLowerCase() + (i + 1 < 10 ? '' : '');
     const pl = fuegeHinzu(w, {
       name: `${name} ${i + 1}`, art, m: masseVonRadius(r), r, p: rel, v, eltern: sonne.id, frei: false,
-      spin: R() * 6.28, spinRate: (0.15 + 0.6 * R()) * (gas ? 1.6 : 1) * (R() < 0.1 ? -1 : 1), tilt: (R() - 0.5) * 0.9, seed: Math.floor(R() * 2 ** 31),
+      spin: R() * 6.28, spinRate: (0.004 + 0.012 * R()) * (gas ? 1.5 : 1) * (R() < 0.1 ? -1 : 1), tilt: (R() - 0.5) * 0.9, seed: Math.floor(R() * 2 ** 31),
     });
     P[0] += pl.m * v[0]; P[1] += pl.m * v[1]; P[2] += pl.m * v[2];
     if (!opt.monde) continue;
@@ -58,7 +58,7 @@ export function erzeugeSystem(opt: SystemOptionen): Welt {
       const mond = fuegeHinzu(w, {
         name: pl.name + ROEM[k] + ' · Mond', art: 'mond', m: masseVonRadius(rm), r: rm,
         p: [pl.p[0] + relM[0], pl.p[1] + relM[1], pl.p[2] + relM[2]], v: [v[0] + vM[0], v[1] + vM[1], v[2] + vM[2]],
-        eltern: pl.id, frei: false, spin: R() * 6.28, spinRate: 0.3 * R(), tilt: 0, seed: Math.floor(R() * 2 ** 31),
+        eltern: pl.id, frei: false, spin: R() * 6.28, spinRate: 0.01 * R(), tilt: 0, seed: Math.floor(R() * 2 ** 31),
       });
       P[0] += mond.m * mond.v[0]; P[1] += mond.m * mond.v[1]; P[2] += mond.m * mond.v[2];
       abstand += rm * 3 + r * (0.9 + 0.5 * R());

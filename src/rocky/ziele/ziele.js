@@ -18,7 +18,7 @@ export function createZiele(ext) {
     RS.msaaV = RS.msaa ? RS.msaa.createView() : null;
     if (OFFSCREEN) {
       if (RS.out) RS.out.destroy();
-      RS.out = ext.device.createTexture({ size: [w, h], format: ext.format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+      RS.out = ext.device.createTexture({ size: [w, h], format: ext.format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | GPUTextureUsage.TEXTURE_BINDING });
       RS.outV = RS.out.createView();
     }
     RS.bloom = [];

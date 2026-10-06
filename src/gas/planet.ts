@@ -1,18 +1,18 @@
 // Planetendaten: Vorlage oder Zufallsplanet übernehmen, Wind- und Bandtabellen, Kamerarichtung im Körper.
 import type { App } from './app';
 import { Vec3, planetRotation, normalize } from '../math';
-import { S, OFF_JETS, OFF_BANDS, OFF_CLOUD } from './zustand';
+import { OFF_JETS, OFF_BANDS, OFF_CLOUD } from './zustand';
 import { RandomOptions, randomPreset, presets, Preset, hexToLinear, windTable, bandTable, TABLE } from '../presets';
 
 export function randomOptions(_a: App): RandomOptions {
-  return { family: S.rndFamily, bands: S.rndBands, storms: S.rndStorms as RandomOptions['storms'], rings: S.rndRings as RandomOptions['rings'] };
+  return { family: _a.S.rndFamily, bands: _a.S.rndBands, storms: _a.S.rndStorms as RandomOptions['storms'], rings: _a.S.rndRings as RandomOptions['rings'] };
 }
 
 export function applyPreset(a: App) {
-  const p = S.preset === 'Zufall' ? randomPreset(S.seed, a.randomOptions()) : presets.find((x) => x.name === S.preset) ?? presets[0];
+  const p = a.S.preset === 'Zufall' ? randomPreset(a.S.seed, a.randomOptions()) : presets.find((x) => x.name === a.S.preset) ?? presets[0];
   const t = p.tune;
-  S.turbulence = t.turbulence; S.convection = t.convection; S.bandWobble = t.bandWobble;
-  S.stormTint = t.stormTint; S.relief = t.relief;
+  a.S.turbulence = t.turbulence; a.S.convection = t.convection; a.S.bandWobble = t.bandWobble;
+  a.S.stormTint = t.stormTint; a.S.relief = t.relief;
   a.usePreset(p);
   a.needsInit = true;
 }
@@ -35,7 +35,7 @@ export function usePreset(a: App, p: Preset) {
 export function writeTables(a: App) {
   const d = a.simData;
   d.set(a.jets, OFF_JETS);
-  const bands = bandTable(a.preset, S.contrast);
+  const bands = bandTable(a.preset, a.S.contrast);
   d.set(bands, OFF_BANDS);
   d.set([...hexToLinear(a.preset.cloud), 1], OFF_CLOUD);
   // Mittelfarbe für die Partikel-Schiene, flächengewichtet (cos Breite)
@@ -63,5 +63,5 @@ export function camBody(a: App): Vec3 {
 export function jetAt(a: App, latRad: number): number {
   const x = Math.min(Math.max((latRad / Math.PI + 0.5) * (TABLE - 1), 0), TABLE - 1);
   const i = Math.floor(x), j = Math.min(i + 1, TABLE - 1);
-  return (a.jets[i] + (a.jets[j] - a.jets[i]) * (x - i)) * S.jetStrength;
+  return (a.jets[i] + (a.jets[j] - a.jets[i]) * (x - i)) * a.S.jetStrength;
 }

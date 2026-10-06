@@ -1,6 +1,7 @@
 // Gebackene Oberflächen (Equirect-Bild je Körper, sRGB-Bytes, mit Mip-Stufen). Gasriesen nutzen die vorhandenen Vorlagen
 // (Bandfarben aus `randomPreset`), Gesteinskörper und Monde ein 3D-Rauschen mit einer von fünf Paletten. Zeitscheibe per Generator.
 import { randomPreset } from '../../vorlagen/zufall.ts';
+import { presets } from '../../presets.ts';
 import { bandTable, TABLE } from '../../vorlagen/tabellen.ts';
 import { hexToLinear } from '../../vorlagen/farben.ts';
 import type { Art } from '../physik/koerper.ts';
@@ -22,6 +23,7 @@ const GESTEINE: Gestein[] = ['erde', 'wueste', 'eis', 'lava', 'grau'];
 /** Welche Palette ein Körper bekommt: aus Seed, Monde vorwiegend grau/eisig. */
 export function gesteinFuer(art: Art, seed: number): Gestein {
   const h = ((seed >>> 0) % 1000) / 1000;
+  if (art !== 'mond') return 'erde';   // Planeten wie der echte Gesteinsplanet (erdähnlich), damit das Überblenden zur Simulation nicht die Art wechselt
   if (art === 'mond') return h < 0.6 ? 'grau' : h < 0.85 ? 'eis' : 'wueste';
   return GESTEINE[Math.min(GESTEINE.length - 1, Math.floor(h * GESTEINE.length))];
 }
@@ -62,8 +64,8 @@ function* zeilen(farbe: (nx: number, ny: number, nz: number, lat: number, lon: n
   }
 }
 
-function gasFarbe(seed: number): (nx: number, ny: number, nz: number, lat: number, lon: number) => C3 {
-  const p = randomPreset((seed >>> 0) || 1);
+function gasFarbe(seed: number, vorlage?: string): (nx: number, ny: number, nz: number, lat: number, lon: number) => C3 {
+  const p = (vorlage && presets.find((x) => x.name === vorlage)) || randomPreset((seed >>> 0) || 1);
   const tab = bandTable(p, 1.1);
   const stuerme = p.storms.map((s) => ({ lat: (s.lat * Math.PI) / 180, lon: (s.lon * Math.PI) / 180, r: (s.radius * Math.PI) / 180, c: hexToLinear(s.color), st: s.strength }));
   const s0 = seed & 0xffff;
@@ -145,9 +147,9 @@ function sonnenFarbe(seed: number): (nx: number, ny: number, nz: number, lat: nu
 }
 
 /** Bäckt eine Oberfläche in Scheiben; Rückgabewert (nach `done`) ist das Bild mit Mip-Kette. */
-export function* backe(art: Art, seed: number): Generator<void, Bild, void> {
+export function* backe(art: Art, seed: number, vorlage?: string): Generator<void, Bild, void> {
   const basis = new Uint8Array(TEX_B * TEX_H * 4);
-  const farbe = art === 'sonne' ? sonnenFarbe(seed) : art === 'gas' ? gasFarbe(seed) : gesteinFarbe(gesteinFuer(art, seed), seed);
+  const farbe = art === 'sonne' ? sonnenFarbe(seed) : art === 'gas' ? gasFarbe(seed, vorlage) : gesteinFarbe(gesteinFuer(art, seed), seed);
   yield* zeilen(farbe, basis);
   return { daten: mipKette(basis), breite: TEX_B, hoehe: TEX_H };
 }

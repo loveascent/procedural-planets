@@ -55,16 +55,23 @@ export function createZeichnen(ext) {
     const orig = S.style === 'orig';
     const A = atmoParams();
     const aspect = w / h, fov = S.fov * Math.PI / 180;
-    if (!cam.zoomed) cam.tDist = fitDist(aspect);
-    cam.dist += (cam.tDist - cam.dist) * 0.18;
-    const eye = [cam.dist * Math.cos(cam.pitch) * Math.sin(cam.yaw), cam.dist * Math.sin(cam.pitch), cam.dist * Math.cos(cam.pitch) * Math.cos(cam.yaw)];
-    const near = Math.max(0.0015, (cam.dist - 1.05) * 0.6), far = cam.dist + 4;
-    const view = lookAt(eye, [0, 0, 0], [0, 1, 0]);
-    const proj = persp(fov, aspect, near, far);
-    const vp = mul4(proj, view), ivp = inv4(vp);
+    const ov = ext.ansicht;   // eingebettet in die Welt: Kamera (in Planetenradien), Sonne und Helligkeit kommen von außen
+    if (!ov) {
+      if (!cam.zoomed) cam.tDist = fitDist(aspect);
+      cam.dist += (cam.tDist - cam.dist) * 0.18;
+    }
+    const eye = ov ? ov.auge : [cam.dist * Math.cos(cam.pitch) * Math.sin(cam.yaw), cam.dist * Math.sin(cam.pitch), cam.dist * Math.cos(cam.pitch) * Math.cos(cam.yaw)];
+    const camDist = ov ? Math.hypot(eye[0], eye[1], eye[2]) : cam.dist;
+    let vp;
+    if (ov) vp = ov.vp;
+    else {
+      const near = Math.max(0.0015, (cam.dist - 1.05) * 0.6), far = cam.dist + 4;
+      vp = mul4(persp(fov, aspect, near, far), lookAt(eye, [0, 0, 0], [0, 1, 0]));
+    }
+    const ivp = inv4(vp);
     const model = planetMatrix(ext.spin, S.tilt * Math.PI / 180);
-    const sun = sunDir();
-    const sunE = orig ? 1 : 3.2;
+    const sun = ov ? V.norm(ov.sonne) : sunDir();
+    const sunE = (orig ? 1 : 3.2) * (ov ? ov.helligkeit : 1);
     const cloudOn = RS.cloudReady && S.cover > 0 && S.modClouds;
     updateCyclones();
     const clU = [cloudOn ? S.cover : 0, ext.simTime / CLOUD_PERIOD, S.wind * 0.35, orig ? 0 : S.cloudShadow];
@@ -78,7 +85,7 @@ export function createZeichnen(ext) {
     if (cw > 0 && S.flare > 0 && S.modFlare) {
       const sx = far4[12] / cw * 0.5 + 0.5, sy = far4[13] / cw * 0.5 + 0.5;
       const toC = V.norm([-eye[0], -eye[1], -eye[2]]);
-      const alpha = Math.asin(Math.min(1, 1.01 / cam.dist));
+      const alpha = Math.asin(Math.min(1, 1.01 / camDist));
       const beta = Math.acos(clamp(V.dot(sun, toC), -1, 1));
       const vis = clamp((beta - alpha + 0.012) / 0.024, 0, 1);
       const onScreen = clamp(1.4 - Math.max(Math.abs(sx - 0.5), Math.abs(sy - 0.5)) * 2, 0, 1);

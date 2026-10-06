@@ -34,6 +34,9 @@ fn sterne(d: vec3f, dichte: f32, schwelle: f32) -> f32 {
   let staub = 0.35 + 0.65 * wert(d * 5.0 + 3.0) * wert(d * 11.0);
   let milch = band * staub * (0.5 + 0.5 * wert(d * 3.0));
   c += mix(vec3f(0.12, 0.1, 0.16), vec3f(0.28, 0.24, 0.2), band) * milch * 0.55;
-  return vec4f(pow(c, vec3f(1.0 / 2.2)), 1.0);
+  // Dither (dreieckverteilt, ±1 Stufe): der 8-Bit-Ausgang zeigt sonst in der dunklen Milchstraße sichtbare Stufen
+  let n1 = fract(52.9829189 * fract(dot(i.pos.xy, vec2f(0.06711056, 0.00583715))));
+  let n2 = fract(52.9829189 * fract(dot(i.pos.xy + vec2f(17.0, 31.0), vec2f(0.06711056, 0.00583715))));
+  return vec4f(max(pow(c, vec3f(1.0 / 2.2)) + (n1 + n2 - 1.0) / 255.0, vec3f(0.0)), 1.0);
 }
 `;

@@ -81,6 +81,9 @@ and are **not** part of the repository. Screenshots in `docs/images/` are render
 | R. Barnes, C. Lehman, D. Mulla, *Priority-Flood* (Computers & Geosciences, 2014) | filling sinks into lakes, drainage directions |
 | J. O'Callaghan & D. Mark (1984), flow accumulation; L. Leopold & T. Maddock (1953), hydraulic geometry | river discharge, width ∝ Q^0.5, depth ∝ Q^0.4 |
 | N. McDonald, *Procedural Hydrology* (2020) | reference for carving rivers into the terrain and filling basins (idea, not code) |
+| Z. M. Leinhardt & S. T. Stewart, *Collisions between Gravity-Dominated Bodies. I. Outcome Regimes and Scaling Laws* (ApJ 745, 79, 2012; arXiv:1109.4588) | collision outcome in the world layer: Q*_RD, largest remnant, hit-and-run limit (`src/welt/physik/leinhardt.ts`) |
+| A. Emsenhuber, E. Asphaug, S. Cambioni, T. Gabriel, S. Schwartz, R. Melikyan, C. A. Denton, *A New Database of Giant Impacts over a Wide Range of Masses and with Material Strength* (PSJ 2024; arXiv:2401.17356) | debris speed ≈ half the impact speed (newer than the 1.1 v_esc used by N-body codes) |
+| S. Childs & J. Steffen, *Collisional fragmentation and bulk composition tracking in REBOUND* (2022; arXiv:2201.05714); H. Rein & S.-F. Liu, REBOUND (A&A 537, A128, 2012) | cross-check of the above, fragment speed 1.1 v_esc, equal-mass fragments, hard-sphere bounce with restitution |
 
 ### Fonts and tools
 IBM Plex Sans/Mono (SIL OFL), Barlow Condensed (SIL OFL), loaded via Google Fonts.

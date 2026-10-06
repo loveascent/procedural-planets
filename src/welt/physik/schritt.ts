@@ -10,6 +10,7 @@ export const MAX_TEILSCHRITTE = 48;
 export interface Schalter extends GravOptionen {
   kollision: boolean;
   truemmer: boolean;
+  ls12: boolean;
 }
 
 let rest = 0;
@@ -19,10 +20,12 @@ export function weltSchritt(w: Welt, dtRealZeit: number, tempo: number, s: Schal
   let n = 0;
   while (rest >= TEILSCHRITT && n < MAX_TEILSCHRITTE) {
     gravitationsSchritt(w, TEILSCHRITT, s);
-    if (s.kollision) { kollisionen(w, s); truemmerAufnehmen(w); }
+    if (s.kollision) { kollisionen(w, s, TEILSCHRITT); truemmerAufnehmen(w); }
     rest -= TEILSCHRITT; n++;
   }
   if (n === MAX_TEILSCHRITTE) rest = 0;
   return n;
 }
 export const zeitRestZuruecksetzen = () => { rest = 0; };
+/** Anteil (0..1) des nächsten Teilschritts, der schon verstrichen ist: Bildinterpolation zwischen letztem und aktuellem Zustand. */
+export const interpolation = () => Math.min(1, Math.max(0, rest / TEILSCHRITT));

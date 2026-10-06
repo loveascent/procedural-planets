@@ -1,6 +1,6 @@
 // Setzt die Shader-Bausteine zu den Compute-Modulen zusammen. Ein Baustein, der aus ist, wird NICHT mitkompiliert:
 // statt seines Codes kommt die Aus-Variante (leerer Einhängepunkt). Welche Bausteine an sind, bestimmen die Regler (varianten()).
-import { S } from '../zustand';
+import type { S as Einstellungen } from '../zustand';
 import { STRUKTUR } from './struktur';
 import { WUERFEL } from './wuerfel';
 import { TABELLEN } from './tabellen';
@@ -53,7 +53,7 @@ export interface Varianten {
   verblassen: boolean;   // Darstellung „Partikel rein“ (zur Mittelfarbe)
 }
 
-export function varianten(): Varianten {
+export function varianten(S: typeof Einstellungen): Varianten {
   const eddy = 0.06 * S.eddyStrength;
   const fluid = S.flow === 'fluid';
   return {

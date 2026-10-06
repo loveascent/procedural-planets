@@ -1,52 +1,85 @@
-// Baustein Bahnspuren: Ringpuffer der letzten Positionen je Planet/Einschlagskörper; füllt Linienpunkte (kamerarelativ).
+// Baustein Bahnlinien: die Bahn jedes Körpers wird aus Ort und Geschwindigkeit relativ zu seinem Elternkörper als Kegelschnitt berechnet
+// (Ellipse, bei ungebundenen Körpern Hyperbel). Sie läuft immer exakt durch den Körper, braucht keine gespeicherten Punkte und kann nicht
+// hinterherhinken oder zucken. Hinter dem Körper (in Flugrichtung rückwärts) ist die Linie heller, wie ein Schweif.
+// Quelle: Zweikörperproblem, Exzentrizitätsvektor e = (v × h)/μ − r/|r|, Bahnparameter p = h²/μ, r(ν) = p / (1 + e·cos ν).
 import type { Koerper, V3, Welt } from '../physik/koerper.ts';
 
-const LAENGE = 220;
-const ABSTAND = 0.12; // Weltsekunden zwischen Stützpunkten
+const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const len = (a: V3) => Math.hypot(a[0], a[1], a[2]);
 
-interface Spur { pos: Float64Array; kopf: number; n: number; naechste: number }
+export interface Bahnelemente { a: number; e: number; periode: number; p: number; nu0: number; x: V3; y: V3 }
+
+/** Bahnelemente von k relativ zu z (G = 1, μ = M_z + m_k). null, wenn entartet. */
+export function bahnelemente(k: Koerper, z: Koerper, roh?: Map<number, { p: V3 }>): Bahnelemente | null {
+  const pk = roh?.get(k.id)?.p ?? k.p, pz = roh?.get(z.id)?.p ?? z.p;
+  const r: V3 = [pk[0] - pz[0], pk[1] - pz[1], pk[2] - pz[2]];
+  const v: V3 = [k.v[0] - z.v[0], k.v[1] - z.v[1], k.v[2] - z.v[2]];
+  const mu = z.m + k.m;
+  const rl = len(r), h = cross(r, v), hl = len(h);
+  if (rl < 1e-9 || hl < 1e-9) return null;
+  const vh = cross(v, h);
+  const ev: V3 = [vh[0] / mu - r[0] / rl, vh[1] / mu - r[1] / rl, vh[2] / mu - r[2] / rl];
+  const e = len(ev);
+  const x: V3 = e > 1e-6 ? [ev[0] / e, ev[1] / e, ev[2] / e] : [r[0] / rl, r[1] / rl, r[2] / rl];
+  const zh: V3 = [h[0] / hl, h[1] / hl, h[2] / hl];
+  const y = cross(zh, x);
+  const p = (hl * hl) / mu;
+  // Winkel des Körpers aus seinem angezeigten (interpolierten) Ort: die Linie läuft so genau durch das gezeichnete Bild
+  const ra: V3 = [k.p[0] - z.p[0], k.p[1] - z.p[1], k.p[2] - z.p[2]];
+  const nu0 = Math.atan2(dot(ra, y), dot(ra, x));
+  const a = e < 1 ? p / (1 - e * e) : Infinity;
+  return { a, e, periode: e < 1 ? 2 * Math.PI * Math.sqrt((a * a * a) / mu) : Infinity, p, nu0, x, y };
+}
 
 export class Spuren {
-  private spuren = new Map<number, Spur>();
+  // Bahnen brauchen keinen Verlauf: die Aufrufe der Welt bleiben, tun aber nichts
+  aktualisiere(_w: Welt) { /* nichts zu sammeln */ }
+  leeren() { /* nichts gespeichert */ }
+  vorbelegen(_w: Welt) { /* nichts nötig: die Bahn ist von Anfang an vollständig */ }
 
-  aktualisiere(w: Welt) {
-    const leben = new Set<number>();
+  /** Schreibt Segmente (12 Floats: Anfang+Helligkeit | Ende+Helligkeit | Farbe+Breite) und gibt deren Anzahl zurück. */
+  fuelle(w: Welt, auge: V3, aus: Float32Array, mondbahnen = true, zeigen: (k: Koerper, z: Koerper, a: number) => number = () => 1, roh?: Map<number, { p: V3 }>): number {
+    let n = 0;
+    const lim = aus.length / 12;
+    const sonne = w.koerper.find((x) => x.art === 'sonne');
     for (const k of w.koerper) {
-      if (k.art === 'sonne' || k.art === 'mond') continue;
-      leben.add(k.id);
-      let s = this.spuren.get(k.id);
-      if (!s) { s = { pos: new Float64Array(3 * LAENGE), kopf: 0, n: 0, naechste: w.zeit }; this.spuren.set(k.id, s); }
-      if (w.zeit >= s.naechste) {
-        s.pos.set(k.p, 3 * s.kopf); s.kopf = (s.kopf + 1) % LAENGE; s.n = Math.min(LAENGE, s.n + 1); s.naechste = w.zeit + ABSTAND;
-      }
-    }
-    for (const id of [...this.spuren.keys()]) if (!leben.has(id)) this.spuren.delete(id);
-  }
-
-  leeren() { this.spuren.clear(); }
-
-  /** Schreibt Linienpunkte (7 Floats) und gibt deren Anzahl zurück. */
-  fuelle(w: Welt, auge: V3, aus: Float32Array, ab = 0): number {
-    let n = ab;
-    for (const [id, s] of this.spuren) {
-      const k: Koerper | undefined = w.koerper.find((x) => x.id === id);
-      if (!k || s.n < 2) continue;
-      const gas = k.art === 'gas', frei = k.frei;
-      const fr: [number, number, number] = frei ? [1, 0.55, 0.25] : gas ? [0.5, 0.65, 1] : [0.85, 0.75, 0.55];
-      for (let j = 0; j < s.n - 1; j++) {
-        if ((n + 2) * 7 > aus.length) return n;
-        const i0 = (s.kopf - 1 - j + 2 * LAENGE) % LAENGE, i1 = (s.kopf - 2 - j + 2 * LAENGE) % LAENGE;
-        const a0 = 1 - j / s.n, a1 = 1 - (j + 1) / s.n;
-        // Stützpunkte im Inneren des Körpers weglassen (sonst zieht die Spur eine Linie über seine Scheibe)
-        const nahe = (i: number) => (s.pos[3 * i] - k.p[0]) ** 2 + (s.pos[3 * i + 1] - k.p[1]) ** 2 + (s.pos[3 * i + 2] - k.p[2]) ** 2 < (k.r * 1.2) ** 2;
-        if (nahe(i0) || nahe(i1)) continue;
-        const put = (i: number, a: number) => {
-          const o = n * 7;
-          aus[o] = s.pos[3 * i] - auge[0]; aus[o + 1] = s.pos[3 * i + 1] - auge[1]; aus[o + 2] = s.pos[3 * i + 2] - auge[2];
-          aus[o + 3] = fr[0]; aus[o + 4] = fr[1]; aus[o + 5] = fr[2]; aus[o + 6] = a * a * 0.55;
+      if (k.art === 'sonne') continue;
+      if (k.art === 'mond' && !mondbahnen) continue;
+      const z = (k.eltern >= 0 ? w.koerper.find((x) => x.id === k.eltern) : undefined) ?? sonne;
+      if (!z) continue;
+      // Elemente aus dem zusammengehörigen Physikzustand (Ort und Geschwindigkeit vom selben Zeitpunkt), nicht aus dem
+      // interpolierten Anzeigeort: sonst passen Ort und Geschwindigkeit nicht zusammen und die Ellipse zittert von Bild zu Bild.
+      const el = bahnelemente(k, z, roh);
+      if (!el) continue;
+      const sicht = zeigen(k, z, Number.isFinite(el.a) ? el.a : el.p);
+      if (sicht < 0.02) continue;
+      const mond = k.art === 'mond', gas = k.art === 'gas';
+      const fr: [number, number, number] = k.frei ? [1, 0.55, 0.25] : gas ? [0.55, 0.7, 1] : mond ? [0.75, 0.8, 0.9] : [0.9, 0.8, 0.6];
+      const breite = mond ? 0.6 : 1;
+      const grund = (mond ? 0.14 : 0.2) * sicht, spitze = (mond ? 0.5 : 0.7) * sicht;
+      const N = mond ? 72 : 168;
+      const gebunden = el.e < 1;
+      // Winkelbereich rückwärts ab dem Körper: gebunden = ein voller Umlauf, ungebunden bis zur Asymptote
+      const bereich = gebunden ? 2 * Math.PI : Math.min(2 * Math.PI, Math.acos(-1 / el.e) * 0.97 + el.nu0);
+      const rand = k.r * 1.05;
+      let vorher: V3 | null = null, vorherA = 0;
+      for (let j = 0; j <= N && n < lim; j++) {
+        const t = j / N;
+        const nu = el.nu0 - bereich * t;
+        const nenner = 1 + el.e * Math.cos(nu);
+        if (nenner <= 0.02) { vorher = null; continue; }
+        const rho = el.p / nenner;
+        if (rho > 6000) { vorher = null; continue; }
+        const c = Math.cos(nu), s = Math.sin(nu);
+        const P: V3 = [z.p[0] + rho * (c * el.x[0] + s * el.y[0]) - auge[0], z.p[1] + rho * (c * el.x[1] + s * el.y[1]) - auge[1], z.p[2] + rho * (c * el.x[2] + s * el.y[2]) - auge[2]];
+        const A = grund + (spitze - grund) * Math.pow(1 - t, 3);
+        const imKoerper = Math.hypot(P[0] - (k.p[0] - auge[0]), P[1] - (k.p[1] - auge[1]), P[2] - (k.p[2] - auge[2])) < rand;
+        if (vorher && !imKoerper) {
+          aus.set([vorher[0], vorher[1], vorher[2], vorherA, P[0], P[1], P[2], A, fr[0], fr[1], fr[2], breite], n * 12);
           n++;
-        };
-        put(i0, a0); put(i1, a1);
+        }
+        vorher = imKoerper ? null : P; vorherA = A;
       }
     }
     return n;

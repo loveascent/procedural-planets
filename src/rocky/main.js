@@ -56,7 +56,10 @@ import { createWirbel } from './wirbel/wirbel.js';
 import { planetParams } from './logik/zufall.js';
 import { SKY_GEN_WGSL, SKY_DRAW_WGSL, skyParams } from '../sky/sky';
 // Startet erst, wenn die gemeinsame Seite diesen Körper zeigt (sonst liefe er im selben Bündel mit).
-export function run() {
+// opts.kopflos = { device, breite, hoehe, seed }: eingebettet in die Welt-Schicht (gemeinsames Gerät, kein Menü, keine Seite, kein eigener Bildtakt);
+// dann liefert run() ein Versprechen auf die Instanz (Schnittstelle `api` unten).
+export function run(opts = {}) {
+const kopflos = opts.kopflos || null;
 // ============================================================================================
 // Prozedurale Planeten, nachgebaut nach colordodge "ProceduralPlanet" (three.js, WTFPL) und erweitert.
 //
@@ -95,17 +98,22 @@ export function run() {
 //   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // ============================================================================================
 
-const Q = new URLSearchParams(location.search);
+const Q = kopflos
+  ? new URLSearchParams({ offscreen: '1', seed: String(kopflos.seed), nebula: '0', stars: '0', flare: '0', res: String(kopflos.aufloesung || 1024), cres: '1024', nres: '64' })
+  : new URLSearchParams(location.search);
 const coarse = matchMedia('(max-width: 760px), (pointer: coarse)').matches;
 
 // ------------------------------------------------------------------ Zustand & Voreinstellungen
 const { S, DEF, randomSeed, cloudRes, nebRes } = createZustand(Q, coarse);
+if (kopflos) { S.modSun = false; S.rotate = false; }   // Sonne und Drehung kommen von der Welt
 
 
 let PP = planetParams(S.seed);
 
 // ------------------------------------------------------------------ Oberfläche (Texte, Regler)
-const $ = (id) => document.getElementById(id);
+const ersatz = new Map();
+// Ohne die Seite des Planeten (eingebettet) gibt es unsichtbare Ersatzelemente statt null
+const $ = (id) => (kopflos && id === 'panel-body' && kopflos.menuWurzel) || document.getElementById(kopflos ? '' : id) || (kopflos ? (ersatz.get(id) ?? (ersatz.set(id, document.createElement('div')), ersatz.get(id))) : null);
 
 
 
@@ -115,11 +123,11 @@ lutCanvas.id = 'lut';
 lutCanvas.width = 512; lutCanvas.height = 512;
 lutCanvas.setAttribute('aria-label', 'Biome image');
 
-const menu = createMenu({ S, DEF, getPP: () => PP, newSeed: (...a) => newSeed(...a), setStyle: (...a) => setStyle(...a), changed: (...a) => changed(...a), randomSeed, lutCanvas, coarse, $ });
-const buildUI = menu.buildUI;
+const menu = createMenu({ kopflos, S, DEF, getPP: () => PP, newSeed: (...a) => newSeed(...a), setStyle: (...a) => setStyle(...a), changed: (...a) => changed(...a), randomSeed, lutCanvas, coarse, $ });
+const buildUI = kopflos ? () => { if (kopflos.menuWurzel) menu.buildUI(); } : menu.buildUI;
 
 // ------------------------------------------------------------------ WebGPU
-const canvas = $('view');
+const canvas = kopflos ? Object.assign(document.createElement('canvas'), { width: kopflos.breite, height: kopflos.hoehe }) : $('view');
 function fail(msg) { const el = $('status'); el.hidden = false; el.textContent = msg; throw new Error(msg); }
 
 // ---------------------------------------------------------------- WGSL: Grundlagen
@@ -128,6 +136,7 @@ function fail(msg) { const el = $('status'); el.hidden = false; el.textContent =
 // ------------------------------------------------------------------ GPU-Objekte
 let device, adapter, context, format, P, L;
 const OFFSCREEN = Q.has('offscreen');
+let ansicht = null;   // eingebettet: Kamera, Sonne und Drehung von der Welt (siehe zeichnen.js)
 // Kantenglättung der Szene (MSAA): glättet Planetenrand, Bergsilhouetten und Wolkenränder; Nachbearbeitung läuft auf dem aufgelösten Bild
 const MSAA = Number(Q.get('msaa')) === 4 ? 4 : 1;   // Standard aus (wie vor v24); ?msaa=4 bzw. Regler schaltet ein
 const GPU_RS = {};
@@ -137,7 +146,7 @@ const J_SLOTS = 1024, J_STRIDE = 256;
 let jBuf, jSlot = 0;
 let uBuf, uData = new Float32Array(204), dPlanet, dCloud, ppDummy, samp;
 
-const { initGPU, makeLayouts, startPipelines, neueVarianten } = createGpuStart({ fail, OFFSCREEN, canvas, S, VF, COMMON, NOISE, GEN, CLOUDGEN, SKY_GEN_WGSL, TRANS, MIP, UDECL, TEXH, VOLC, VOLC_AUS, HYDRO_WARP, WELLEN, WELLEN_AUS, ATMO, ATMO_AUS, ATMO_POST, ATMO_POST_AUS, BLOOM, BLOOM_AUS, FLARE, FLARE_AUS, SCHATTEN, SCHATTEN_AUS, SAUM, SAUM_AUS, EROSION, EROSION_AUS, FLUSS_GEN, FLUSS_GEN_AUS, FLUSS_SZENE, FLUSS_SZENE_AUS, STIL_ORIGINAL, STIL_ORIGINAL_AUS, TERRASSEN, TERRASSEN_AUS, FEINDETAIL, FEINDETAIL_AUS, WASSER, WASSER_AUS, BRANDUNG, BRANDUNG_AUS, MEEREIS, MEEREIS_AUS, KAVITAET, KAVITAET_AUS, GEOMORPH, GEOMORPH_AUS, RELIEF, RELIEF_AUS, HIMMEL, HIMMEL_AUS, SONNE, SONNE_AUS, BIOM_CD, BIOM_CD_AUS, BIOM_ERDE, BIOM_ERDE_AUS, GEBIRGE, GEBIRGE_AUS, STIL_ORIGINAL_WOLKEN, STIL_ORIGINAL_WOLKEN_AUS, STIL_ORIGINAL_LEUCHTSAUM, STIL_ORIGINAL_LEUCHTSAUM_AUS, ANSICHTEN_DEBUG, ANSICHTEN_DEBUG_AUS, WOLKEN, WOLKEN_AUS, SCENE, SKY_DRAW_WGSL, POST, MSAA, get adapter() { return adapter; }, set adapter(v) { adapter = v; }, get device() { return device; }, set device(v) { device = v; }, get format() { return format; }, set format(v) { format = v; }, get context() { return context; }, set context(v) { context = v; }, get L() { return L; }, set L(v) { L = v; } });
+const { initGPU, makeLayouts, startPipelines, neueVarianten } = createGpuStart({ fail, OFFSCREEN, kopflos, canvas, S, VF, COMMON, NOISE, GEN, CLOUDGEN, SKY_GEN_WGSL, TRANS, MIP, UDECL, TEXH, VOLC, VOLC_AUS, HYDRO_WARP, WELLEN, WELLEN_AUS, ATMO, ATMO_AUS, ATMO_POST, ATMO_POST_AUS, BLOOM, BLOOM_AUS, FLARE, FLARE_AUS, SCHATTEN, SCHATTEN_AUS, SAUM, SAUM_AUS, EROSION, EROSION_AUS, FLUSS_GEN, FLUSS_GEN_AUS, FLUSS_SZENE, FLUSS_SZENE_AUS, STIL_ORIGINAL, STIL_ORIGINAL_AUS, TERRASSEN, TERRASSEN_AUS, FEINDETAIL, FEINDETAIL_AUS, WASSER, WASSER_AUS, BRANDUNG, BRANDUNG_AUS, MEEREIS, MEEREIS_AUS, KAVITAET, KAVITAET_AUS, GEOMORPH, GEOMORPH_AUS, RELIEF, RELIEF_AUS, HIMMEL, HIMMEL_AUS, SONNE, SONNE_AUS, BIOM_CD, BIOM_CD_AUS, BIOM_ERDE, BIOM_ERDE_AUS, GEBIRGE, GEBIRGE_AUS, STIL_ORIGINAL_WOLKEN, STIL_ORIGINAL_WOLKEN_AUS, STIL_ORIGINAL_LEUCHTSAUM, STIL_ORIGINAL_LEUCHTSAUM_AUS, ANSICHTEN_DEBUG, ANSICHTEN_DEBUG_AUS, WOLKEN, WOLKEN_AUS, SCENE, SKY_DRAW_WGSL, POST, MSAA, get adapter() { return adapter; }, set adapter(v) { adapter = v; }, get device() { return device; }, set device(v) { device = v; }, get format() { return format; }, set format(v) { format = v; }, get context() { return context; }, set context(v) { context = v; }, get L() { return L; }, set L(v) { L = v; } });
 
 function texArray(N, fmt, levels, extra = 0) {
   return device.createTexture({ size: [N, N, 6], format: fmt, mipLevelCount: levels,
@@ -191,12 +200,12 @@ const { ensureTargets } = createZiele({ RS, MSAA, OFFSCREEN, ubuf, get device() 
 
 const { cam, fitDist, pointers } = createKamera({ S, canvas });
 
-const { changed, setStyle, newSeed } = createReaktion({ variantenNachziehen, wolkenErzeugen, himmelErzeugen, S, RS, menu, regenerate, DEF, queueSky, seaFromFraction, buildRiverLines, buildUI, $, setLang, randomSeed, get device() { return device; }, set device(v) { device = v; }, get seaH() { return seaH; }, set seaH(v) { seaH = v; }, get lutDirty() { return lutDirty; }, set lutDirty(v) { lutDirty = v; }, get riverT() { return riverT; }, set riverT(v) { riverT = v; }, get PP() { return PP; }, set PP(v) { PP = v; } });
+const { changed, setStyle, newSeed } = createReaktion({ kopflos, variantenNachziehen, wolkenErzeugen, himmelErzeugen, S, RS, menu, regenerate, DEF, queueSky, seaFromFraction, buildRiverLines, buildUI, $, setLang, randomSeed, get device() { return device; }, set device(v) { device = v; }, get seaH() { return seaH; }, set seaH(v) { seaH = v; }, get lutDirty() { return lutDirty; }, set lutDirty(v) { lutDirty = v; }, get riverT() { return riverT; }, set riverT(v) { riverT = v; }, get PP() { return PP; }, set PP(v) { PP = v; } });
 
 
 // ------------------------------------------------------------------ Zeichnen
 let spin = 0.6, simTime = 0;
-const { render } = createZeichnen({ S, coarse, RS, eroOct, cloudRes, nebRes, cycA, cycB, canvas, ensureTargets, updateTrans, drawBiome, atmoParams, cam, fitDist, updateCyclones, CLOUD_PERIOD, SPLIT, mainGroup, buildPatches, PATCH_G, OFFSCREEN, get uData() { return uData; }, set uData(v) { uData = v; }, get simTime() { return simTime; }, set simTime(v) { simTime = v; }, get moistQ() { return moistQ; }, set moistQ(v) { moistQ = v; }, get PP() { return PP; }, set PP(v) { PP = v; }, get seaH() { return seaH; }, set seaH(v) { seaH = v; }, get device() { return device; }, set device(v) { device = v; }, get uBuf() { return uBuf; }, set uBuf(v) { uBuf = v; }, get lutDirty() { return lutDirty; }, set lutDirty(v) { lutDirty = v; }, get spin() { return spin; }, set spin(v) { spin = v; }, get dPlanet() { return dPlanet; }, set dPlanet(v) { dPlanet = v; }, get dCloud() { return dCloud; }, set dCloud(v) { dCloud = v; }, get P() { return P; }, set P(v) { P = v; }, get meshPlanet() { return meshPlanet; }, set meshPlanet(v) { meshPlanet = v; }, get meshCloud() { return meshCloud; }, set meshCloud(v) { meshCloud = v; }, get context() { return context; }, set context(v) { context = v; } });
+const { render } = createZeichnen({ get ansicht() { return ansicht; }, S, coarse, RS, eroOct, cloudRes, nebRes, cycA, cycB, canvas, ensureTargets, updateTrans, drawBiome, atmoParams, cam, fitDist, updateCyclones, CLOUD_PERIOD, SPLIT, mainGroup, buildPatches, PATCH_G, OFFSCREEN, get uData() { return uData; }, set uData(v) { uData = v; }, get simTime() { return simTime; }, set simTime(v) { simTime = v; }, get moistQ() { return moistQ; }, set moistQ(v) { moistQ = v; }, get PP() { return PP; }, set PP(v) { PP = v; }, get seaH() { return seaH; }, set seaH(v) { seaH = v; }, get device() { return device; }, set device(v) { device = v; }, get uBuf() { return uBuf; }, set uBuf(v) { uBuf = v; }, get lutDirty() { return lutDirty; }, set lutDirty(v) { lutDirty = v; }, get spin() { return spin; }, set spin(v) { spin = v; }, get dPlanet() { return dPlanet; }, set dPlanet(v) { dPlanet = v; }, get dCloud() { return dCloud; }, set dCloud(v) { dCloud = v; }, get P() { return P; }, set P(v) { P = v; }, get meshPlanet() { return meshPlanet; }, set meshPlanet(v) { meshPlanet = v; }, get meshCloud() { return meshCloud; }, set meshCloud(v) { meshCloud = v; }, get context() { return context; }, set context(v) { context = v; } });
 
 // ------------------------------------------------------------------ Schleife
 let last = performance.now(), budget = 256 * 256 * 2, fpsAcc = 0, fpsN = 0, fpsT = 0;
@@ -229,9 +238,43 @@ async function boot() {
     fail('Shader: ' + (msgs.slice(0, 6).join('\n') || String(e.message || e)));
   }
   initResources();
-  window.planets = planetsApi;
   regenerate();
-  requestAnimationFrame(step);
+  if (!kopflos) { window.planets = planetsApi; requestAnimationFrame(step); }
 }
-boot().catch((e) => { if (!$('status').textContent) fail(String(e.message || e)); });
+if (!kopflos) { boot().catch((e) => { if (!$('status').textContent) fail(String(e.message || e)); }); return; }
+
+// ------------------------------------------------------------------ Schnittstelle der eingebetteten Instanz
+const api = {
+  S,
+  /** Pipelines übersetzt, Karten erzeugt (keine offenen Aufgaben) */
+  get bereit() { return !!P && jobs.length === 0 && regenBusy === 0; },
+  setzeGroesse(w, h) { canvas.width = w; canvas.height = h; },
+  /** Steckbrief des echt berechneten Planeten als Zeilen. */
+  fakten() {
+    return [['Seed', String(S.seed)], ['Wasseranteil', `${Math.round(100 * PP.water)} %`], ['Wolkenbedeckung', `${Math.round(100 * S.cover)} %`], ['Gebirgsanteil', `${Math.round(100 * PP.mountains)} %`],
+      ['Kartenauflösung', `${S.res}²`], ['Stil', S.style === 'orig' ? 'Original 1:1' : '+20 % besser'], ['Vulkane', S.volcanoOn ? `an (${Math.round(S.volcanoes * 100)} %)` : 'aus']];
+  },
+  /** Einen Regler von außen setzen (wie im Menü), z. B. die Kartenauflösung `res`. */
+  setze(k, v) { S[k] = v; changed({ k }); },
+  /** Das Menü des Gesteinsplaneten (alle Regler und Bausteine-Schalter) in `wurzel` aufbauen; null = entfernen. */
+  menue(wurzel) { kopflos.menuWurzel = wurzel; if (wurzel) menu.buildUI(); },
+  /** Neuer Planet aus dem Seed der Welt; die Karten entstehen in den nächsten Bildern (`arbeite`). */
+  setzeSeed(seed) { newSeed(String(seed)); },
+  /** Erzeugungsaufgaben im Zeitbudget (Pixel pro Aufruf) abarbeiten. */
+  arbeite(pixel = 3e6) {
+    if (!P || !jobs.length) return;
+    const enc = device.createCommandEncoder();
+    runJobs(enc, pixel);
+    device.queue.submit([enc.finish()]);
+  },
+  /** Zeichnet aus der Kamera der Welt; Rückgabe: Textur (RGBA8, Hintergrund schwarz). */
+  zeichne(a, dt) {
+    ansicht = a; spin = a.drehung; simTime += dt;
+    const enc = device.createCommandEncoder();
+    render(enc);
+    device.queue.submit([enc.finish()]);
+    return RS.out;
+  },
+};
+return boot().then(() => api);
 }

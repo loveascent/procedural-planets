@@ -9,7 +9,7 @@ struct U {
   oben: vec4f,        // xyz, w = Seitenverhältnis
   vor: vec4f,         // xyz, w = Zeit (Sekunden)
   sonne: vec4f,       // xyz relativ zur Kamera, w = Sonnenradius
-  pix: vec4f,         // x = Pixel pro Radiant (Höhe/fov), y = Anzahl Kugeln für Schatten
+  pix: vec4f,         // x = Pixel pro Radiant (Höhe/fov), y = Anzahl Kugeln für Schatten, z/w = NDC-Breite/Höhe eines Pixels
   kugeln: array<vec4f, 64>,   // xyz relativ zur Kamera, w = Radius (0 = ausgelassen)
 };
 @group(0) @binding(0) var<uniform> u: U;

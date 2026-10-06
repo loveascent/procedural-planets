@@ -142,6 +142,6 @@ fn fs(vin: VOut) -> @location(0) vec4f {
 
   var outc = col;
   if (mode == 0) { outc = aces(col * U.p2.z); }
-  return vec4f(pow(outc, vec3f(1.0 / 2.2)), 1.0);
+  return hook_ausgabe(pow(outc, vec3f(1.0 / 2.2)), tPlanet >= 0.0);
 }
 `;

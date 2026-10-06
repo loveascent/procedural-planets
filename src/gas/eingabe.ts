@@ -1,6 +1,5 @@
 // Eingabe: Ziehen, Zoomen, Fingergesten auf dem Planeten.
 import type { App } from './app';
-import { S } from './zustand';
 import { canvas } from './dom';
 
 export function bindInput(app: App) {
@@ -21,7 +20,7 @@ export function bindInput(app: App) {
       pinch = d;
       return;
     }
-    if (S.map) return;
+    if (app.S.map) return;
     app.cam.yaw -= (e.clientX - prev.x) * 0.006;
     app.cam.pitch = Math.max(-1.45, Math.min(1.45, app.cam.pitch + (e.clientY - prev.y) * 0.006));
   });

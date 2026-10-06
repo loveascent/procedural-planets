@@ -2,7 +2,7 @@
 import type { App } from './app';
 import { fpsEl, showLoading, loadBar } from './dom';
 import { t } from '../i18n';
-import { S, MAX_LOAD_MS, DT } from './zustand';
+import { MAX_LOAD_MS, DT } from './zustand';
 
 export function starteSchleife(app: App) {
   const loop = async (now: number) => {
@@ -10,12 +10,12 @@ export function starteSchleife(app: App) {
     app.last = now;
     app.resize();
     app.initIfNeeded();
-    if (app.warm > 0 && !S.paused) {
+    if (app.warm > 0 && !app.S.paused) {
       await app.warmBatch();
     } else {
       app.fpsAcc += real; app.fpsFrames++;
       if (app.fpsAcc > 0.5) {
-        const lapse = S.timeScale !== 1 ? ` · ${t('Zeitraffer', 'time lapse')} ${app.achieved.toFixed(1)}×` : '';
+        const lapse = app.S.timeScale !== 1 ? ` · ${t('Zeitraffer', 'time lapse')} ${app.achieved.toFixed(1)}×` : '';
         app.fpsNow = Math.round(app.fpsFrames / app.fpsAcc);
         fpsEl.textContent = `${app.fpsNow} fps${lapse}`;
         app.fpsAcc = 0; app.fpsFrames = 0;
@@ -49,7 +49,7 @@ export function initIfNeeded(app: App) {
   app.needsDye = false;
   showLoading(true);
   app.restored = false;
-  if (fresh && S.remember) void app.loadState();
+  if (fresh && app.S.remember) void app.loadState();
 }
 
 /** Vorrechnen: viele Schritte ohne Rendern, GPU-Zeit messen, Qualität kalibrieren. */
@@ -62,7 +62,7 @@ export async function warmBatch(app: App) {
   app.stepMs = app.stepMs > 0 ? app.stepMs * 0.7 + ms * 0.3 : ms;
   app.warmRate = Math.min(1024, Math.max(1, Math.round(40 / app.stepMs)));
   const done = app.warmTotal - app.warm;
-  if (S.autoQuality && !app.calibrated && done >= 90) app.calibrate();
+  if (app.S.autoQuality && !app.calibrated && done >= 90) app.calibrate();
   // Ladezeit begrenzen: nicht länger als ~5 s vorrechnen, auch auf langsamen GPUs.
   if (done >= 90 && !app.offscreen && !app.manualSkip) {
     const left = Math.max(0, Math.floor((MAX_LOAD_MS - (performance.now() - app.warmStart)) / app.stepMs));

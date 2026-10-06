@@ -42,6 +42,8 @@ async function start() {
     fail(`<b>GPU-Fehler:</b> ${(e as GPUUncapturedErrorEvent).error.message}`);
   });
   const app = new App(device);
+  const code = new URLSearchParams(location.search).get('code');
+  if (code) { try { app.restore(app.decode(code)); } catch (e) { console.warn('Planeten-Code aus der Adresse nicht lesbar', e); } }
   window.gasPlanet = {
     settings: S, capture: () => app.capture(), readRow: (w, f, y) => app.readRow(w, f, y),
     filmstrip: (o) => app.filmstrip(o), selftest: () => app.selftest(), frame: () => app.frameCount(),

@@ -2,7 +2,7 @@ import { t } from './i18n';
 
 // Gemeinsame Kopfzeile aller Planeten-Seiten: Planetentyp-Umschalter und Sprache.
 // Jeder Planetentyp ist ein Modul mit eigener Seite; Menü, Stil und Bedienung sind dieselben.
-export type PlanetKind = 'gas' | 'rocky';
+export type PlanetKind = 'gas' | 'rocky' | 'welt';
 
 // Alle Körper laufen in einer Seite (index.html?body=…). Noch nicht gebaute Typen stehen ausgegraut da,
 // mit dem Plan, welche Module sie bekommen.
@@ -18,11 +18,16 @@ const PAGES: { kind: string; file: string; de: string; en: string; soon?: [strin
   { kind: 'lava', file: '', de: 'Lavaplanet', en: 'Lava planet', soon: [
     'Kommt später. Module: Gelände + Vulkane aus dem Gesteinsplaneten, Lava statt Meer, glühende Risse, dünne Atmosphäre.',
     'Coming later. Modules: terrain + volcanoes from the rocky planet, lava instead of sea, glowing cracks, thin atmosphere.'] },
+  { kind: 'welt', file: 'index.html?body=welt', de: 'Sonnensystem', en: 'Solar system' },
+  { kind: 'galaxy', file: '', de: 'Galaxie', en: 'Galaxy', soon: [
+    'Kommt später. Viele Sonnensysteme in einer Karte; ein System wird erst geöffnet, wenn man hineinfliegt.',
+    'Coming later. Many solar systems in one map; a system only opens when you fly into it.'] },
 ];
 
-/** Welcher Körper diese Seite zeigt (?body=rocky, sonst Gasriese). */
+/** Welcher Körper diese Seite zeigt (?body=rocky bzw. welt, sonst Gasriese). */
 export function currentBody(): PlanetKind {
-  return new URLSearchParams(location.search).get('body') === 'rocky' ? 'rocky' : 'gas';
+  const b = new URLSearchParams(location.search).get('body');
+  return b === 'rocky' || b === 'welt' ? b : 'gas';
 }
 // Eingefrorene Versionen: ['' = aktuell] + Dateien in demo/
 const VERSIONS: [string, string, string][] = [

@@ -7,7 +7,7 @@ import { renderVarianten, renderCode } from './shader/render_zusammen';
 /** Compute-Pipelines. Die Shader-Module werden aus den Bausteinen zusammengesetzt, die laut Reglern an sind; ein Baustein, der aus ist,
  *  wird nicht mitkompiliert. Ändert sich ein Schalter (oder SEAMLESS = nahtlos exakte Abtastung an Würfelkanten), werden die Pipelines neu gebaut. */
 export function buildPipes(a: App, seamless: boolean) {
-  const v = varianten();
+  const v = varianten(a.S);
   const key = JSON.stringify([seamless, v]);
   if (a.pipesBuilt === key) return;
   a.fluidModule = module(a, 'fluid', fluidCode(v));
@@ -23,7 +23,7 @@ export function buildPipes(a: App, seamless: boolean) {
 
 /** Render-Pipeline aus den Darstellungs-Bausteinen, die laut Reglern und Planet an sind; bei Änderung neu gebaut. */
 export function buildRenderPipe(a: App) {
-  const v = renderVarianten(a.preset);
+  const v = renderVarianten(a.preset, a.S);
   const key = JSON.stringify(v);
   if (a.renderKey === key) return;
   const m = module(a, 'render', renderCode(v));

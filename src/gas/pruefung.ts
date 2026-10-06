@@ -1,7 +1,6 @@
 // Selbsttest und Prüf-Schnittstellen (Würfelkanten-Messung, Bildzähler).
 import type { App } from './app';
 import { t } from '../i18n';
-import { S } from './zustand';
 import { COMMON as commonWGSL } from './shader/zusammen';
 
 export function frameCount(app: App) {
@@ -61,7 +60,7 @@ export async function selftest(app: App): Promise<{ edge: number; interior: numb
 export async function runSelftest(app: App) {
   const el = document.getElementById('diag-msg');
   const r = await app.selftest();
-  if (!r.seamless && !S.seamless) { S.seamless = true; app.buildPipes(true); app.panel.refresh(); app.remember(); }
+  if (!r.seamless && !app.S.seamless) { app.S.seamless = true; app.buildPipes(true); app.panel.refresh(); app.remember(); }
   if (el) el.textContent = r.seamless
     ? t(`Nahtlos: Fehler an Kanten ${r.edge.toFixed(4)}, innen ${r.interior.toFixed(4)}. „Exakte Kanten“ ist nicht nötig. Sichtbare Übergänge kommen dann nicht von der Abtastung (siehe docs/STATUS.md).`,
       `Seamless: error at edges ${r.edge.toFixed(4)}, inside ${r.interior.toFixed(4)}. “Exact edges” is not needed. Visible transitions then do not come from sampling (see docs/STATUS.md).`)

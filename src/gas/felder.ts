@@ -2,7 +2,7 @@
 import type { App } from './app';
 import { t } from '../i18n';
 import { loadNote } from './dom';
-import { CubeField, S } from './zustand';
+import { CubeField } from './zustand';
 
 export function cubeField(a: App, n: number): CubeField {
   const tex = a.device.createTexture({
@@ -20,18 +20,18 @@ export function cubeField(a: App, n: number): CubeField {
 export function allocVel(a: App) {
   for (const f of [...a.vel, ...a.prs]) f.tex.destroy();
   a.aux?.tex.destroy(); a.div?.tex.destroy(); a.flow?.tex.destroy();
-  const n = S.velRes;
+  const n = a.S.velRes;
   a.device.pushErrorScope('out-of-memory');
   a.vel = [a.cubeField(n), a.cubeField(n)];
   a.prs = [a.cubeField(n), a.cubeField(n)];
   a.aux = a.cubeField(n);
   a.div = a.cubeField(n);
-  a.flow = a.cubeField(S.curlRes);
+  a.flow = a.cubeField(a.S.curlRes);
   a.needsInit = true;
   // Zu wenig Grafikspeicher: Auflösung halbieren statt abzustürzen.
   a.device.popErrorScope().then((err) => {
     if (!err) return;
-    if (S.curlRes > 256) S.curlRes = Math.max(256, (S.curlRes / 2) | 0); else S.velRes = Math.max(32, (S.velRes / 2) | 0);
+    if (a.S.curlRes > 256) a.S.curlRes = Math.max(256, (a.S.curlRes / 2) | 0); else a.S.velRes = Math.max(32, (a.S.velRes / 2) | 0);
     a.memoryNote();
     a.allocVel();
   });
@@ -46,10 +46,10 @@ export function memoryNote(a: App) {
 export function allocDye(a: App) {
   for (const f of a.dye) f.tex.destroy();
   a.device.pushErrorScope('out-of-memory');
-  a.dye = [a.cubeField(S.dyeRes), a.cubeField(S.dyeRes)];
+  a.dye = [a.cubeField(a.S.dyeRes), a.cubeField(a.S.dyeRes)];
   a.device.popErrorScope().then((err) => {
-    if (!err || S.dyeRes <= 128) return;
-    S.dyeRes = Math.max(128, (S.dyeRes / 2) | 0);
+    if (!err || a.S.dyeRes <= 128) return;
+    a.S.dyeRes = Math.max(128, (a.S.dyeRes / 2) | 0);
     a.memoryNote();
     a.allocDye();
   });
@@ -58,8 +58,8 @@ export function allocDye(a: App) {
 }
 
 export function allocParticles(a: App) {
-  const want = Math.min(S.particles, Math.floor(a.device.limits.maxStorageBufferBindingSize / 32));
-  S.particles = want;
+  const want = Math.min(a.S.particles, Math.floor(a.device.limits.maxStorageBufferBindingSize / 32));
+  a.S.particles = want;
   if (want <= a.partCapacity) return;
   a.parts?.destroy();
   a.device.pushErrorScope('out-of-memory');
@@ -69,9 +69,9 @@ export function allocParticles(a: App) {
   a.device.popErrorScope().then((err) => {
     if (!err || want <= 16384) return;
     a.partCapacity = 0;
-    S.particles = Math.max(16384, Math.floor(want / 2 / 16384) * 16384);
+    a.S.particles = Math.max(16384, Math.floor(want / 2 / 16384) * 16384);
     a.allocParticles();
     a.panel?.refresh();
-    loadNote.textContent = t(`Nicht genug Grafikspeicher: ${S.particles} Partikel`, `Not enough GPU memory: ${S.particles} particles`);
+    loadNote.textContent = t(`Nicht genug Grafikspeicher: ${a.S.particles} Partikel`, `Not enough GPU memory: ${a.S.particles} particles`);
   });
 }

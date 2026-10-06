@@ -15,10 +15,10 @@ import { abschnittLicht } from './menue/licht';
 import { abschnittGpu } from './menue/gpu';
 import { Panel } from '../ui';
 import { t } from '../i18n';
-import { Key, S, DEFAULTS } from './zustand';
+import { Key, DEFAULTS } from './zustand';
 
 export function buildUI(app: App) {
-  const root = document.getElementById('panel-body') as HTMLElement;
+  const root = (app.menuWurzel ?? document.getElementById('panel-body')) as HTMLElement;
   root.innerHTML = '';
   const on = (key: string) => app.onChange(key as Key);
   const pct = (v: number) => `${Math.round(v * 100)} %`;
@@ -31,7 +31,7 @@ export function buildUI(app: App) {
   // Alle Regler gehen immer bis zum Maximum; "Gerät" setzt nur die Startwerte.
   const lim = { velRes: 1024, dyeRes: 8192, curlRes: 4096, particles: 67108864 };
 
-  app.panel = new Panel(root, S as unknown as Record<string, number | string | boolean>, on, DEFAULTS as unknown as Record<string, number | string | boolean>);
+  app.panel = new Panel(root, app.S as unknown as Record<string, number | string | boolean>, on, DEFAULTS as unknown as Record<string, number | string | boolean>);
   const k: MenueKontext = { app, pct, f2, f3, n, fx, presetName, lim };
   const p = app.panel;
   abschnittPlanet(p, k);
@@ -62,9 +62,9 @@ export function buildUI(app: App) {
       t('Tastet an Würfelkanten die Nachbartexel einzeln ab, statt der Hardware zu vertrauen. Nur nötig, wenn der Selbsttest eine Naht findet; kostet etwas Leistung.',
         'Samples neighbouring texels one by one at cube edges instead of trusting the hardware. Only needed if the self-test finds a seam; costs some performance.'))
     .custom(app.diagNote());
-  app.buildToolbar();
+  if (!app.kopflos) app.buildToolbar();   // Knopfleiste und Kopfzeile gehören der Seite des Gasriesen, nicht der eingebetteten Instanz
   app.updateVisibility();
-  app.applyStaticText();
+  if (!app.kopflos) app.applyStaticText();
 }
 
 

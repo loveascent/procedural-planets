@@ -72,7 +72,8 @@ export function gravitationsSchritt(w: Welt, dt: number, o: GravOptionen) {
   beschleunigungen(w, o, acc);
   for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) K[i].v[k] += 0.5 * dt * acc[3 * i + k];
   truemmerKick(0.5 * dt);
-  for (let i = 0; i < n; i++) { const k = K[i]; for (let c = 0; c < 3; c++) k.p[c] += dt * k.v[c]; k.spin += k.spinRate * dt; }
+  for (let i = 0; i < n; i++) { const k = K[i]; k.pv[0] = k.p[0]; k.pv[1] = k.p[1]; k.pv[2] = k.p[2]; k.spinV = k.spin; for (let c = 0; c < 3; c++) k.p[c] += dt * k.v[c]; k.spin += k.spinRate * dt; }
+  t.pv.set(t.p.subarray(0, 3 * t.n));
   for (let i = 0; i < t.n; i++) for (let c = 0; c < 3; c++) { t.p[3 * i + c] += dt * t.v[3 * i + c]; }
   beschleunigungen(w, o, acc);
   for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) K[i].v[k] += 0.5 * dt * acc[3 * i + k];

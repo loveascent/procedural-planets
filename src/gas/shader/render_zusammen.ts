@@ -2,7 +2,7 @@
 // (stattdessen seine Aus-Variante mit leerem Einhängepunkt). Welche an sind, bestimmen Regler und Planet (renderVarianten()).
 import { SKY_DRAW_WGSL } from '../../sky/sky';
 import type { Preset } from '../../presets';
-import { S } from '../zustand';
+import type { S as Einstellungen } from '../zustand';
 import { RENDER_BASIS } from './render_basis';
 import { KARTE, KARTE_AUS } from './karte';
 import { ATMOSAUM, ATMOSAUM_AUS } from './atmosaum';
@@ -14,19 +14,21 @@ import { RELIEF_MEHRSTUFIG, RELIEF_EINFACH, RELIEF_AUS } from './relief';
 import { DAEMMERUNG_V04, DAEMMERUNG_WEICH, DAEMMERUNG_AUS } from './daemmerung';
 import { RAND_V04, RAND_WEICH, RAND_AUS } from './randschimmer';
 import { HIMMEL_GAS, HIMMEL_GAS_AUS } from './himmel_gas';
+import { DURCHSICHTIG, DURCHSICHTIG_AUS } from './durchsichtig';
 
 export interface RenderVarianten {
   himmel: boolean; karte: boolean; saum: boolean; ringe: boolean; ansichten: boolean; tiefe: boolean; parallaxe: boolean;
-  relief: 'aus' | 'einfach' | 'mehrstufig'; daemmerung: 'v04' | 'soft' | 'off'; rand: 'v04' | 'soft' | 'off';
+  durchsichtig: boolean; relief: 'aus' | 'einfach' | 'mehrstufig'; daemmerung: 'v04' | 'soft' | 'off'; rand: 'v04' | 'soft' | 'off';
 }
 
-export function renderVarianten(p: Preset): RenderVarianten {
+export function renderVarianten(p: Preset, S: typeof Einstellungen): RenderVarianten {
   return {
     himmel: S.nebula > 0 || S.stars > 0,
     karte: S.map,
     saum: S.atmosphere > 0 && p.atmosphereStrength > 0,
     ringe: !!p.rings && p.rings.opacity > 0,
     ansichten: S.view !== 0,
+    durchsichtig: S.transparent,
     tiefe: S.depthOn,
     parallaxe: S.pomOn,
     relief: S.relief > 0 ? (S.reliefMulti && S.reliefCoarse > 0 ? 'mehrstufig' : 'einfach') : 'aus',
@@ -41,6 +43,7 @@ export function renderCode(v: RenderVarianten): string {
   c += RENDER_BASIS;
   c += v.himmel ? HIMMEL_GAS : HIMMEL_GAS_AUS;
   c += v.ansichten ? ANSICHTEN : ANSICHTEN_AUS;
+  c += v.durchsichtig ? DURCHSICHTIG : DURCHSICHTIG_AUS;
   c += v.karte ? KARTE : KARTE_AUS;
   c += v.saum ? ATMOSAUM : ATMOSAUM_AUS;
   c += v.ringe ? RINGE : RINGE_AUS;

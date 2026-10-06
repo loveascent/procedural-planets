@@ -91,6 +91,7 @@ export const S = {
   spinSpeed: 0.5,
   view: 0,
   map: false,
+  transparent: false,     // Hintergrund durchsichtig (Gasriese eingebettet in eine andere Szene); aus = wie bisher
 };
 // „Zustand merken“ bleibt über das Neuladen hinweg an (sonst wäre es nach jedem Laden wieder aus)
 try { S.remember = localStorage.getItem('fgp-remember') === '1'; } catch { /* Speicher gesperrt */ }
@@ -98,6 +99,11 @@ export type Key = keyof typeof S;
 export const RELIEF_BY_LOOK: Record<string, number> = { dye: 1, particles: 0.35, pure: 0.35 };  // Flüssigkeit 1,0 (Vorgabe des Urhebers)
 export const EDDY_BY_LOOK: Record<string, number> = { dye: 1.5, particles: 1, pure: 1 };
 export const DEFAULTS = { ...S };
+
+/** Frische Einstellungen für eine eingebettete Instanz: Standardwerte, Zustand merken aus, Hintergrund durchsichtig, kein eigener Himmel. */
+export function neueEinstellungen(): typeof S {
+  return { ...DEFAULTS, remember: false, transparent: true, nebula: 0, stars: 0, quality: 'welt', autoQuality: false };
+}
 
 // Geräteklassen: Startwerte und Obergrenzen der Regler. "ultra" schaltet die großen Werte frei.
 export type Tier = { velRes: number; dyeRes: number; curlRes: number; particles: number; dpr: number; iterations?: number;
@@ -108,6 +114,8 @@ export const QUALITY: Record<string, Tier> = {
   standard: { velRes: 128, dyeRes: 768, curlRes: 384, particles: 1048576, dpr: 1.25 },
   high: { velRes: 256, dyeRes: 2048, curlRes: 768, particles: 983040, dpr: 1.75, iterations: 24, fluid: { velRes: 352, dpr: 2 } },
   ultra: { velRes: 256, dyeRes: 2560, curlRes: 1024, particles: 4489216, dpr: 4, iterations: 24 },
+  // eingebettet in die Welt-Schicht: klein und schnell (nur der nächste Gasriese läuft wirklich)
+  welt: { velRes: 128, dyeRes: 512, curlRes: 256, particles: 262144, dpr: 1, iterations: 16 },
   // alte Startwerte (v0.4), weiter wählbar
   phone04: { velRes: 96, dyeRes: 384, curlRes: 256, particles: 262144, dpr: 1 },
   high04: { velRes: 192, dyeRes: 1024, curlRes: 768, particles: 4194304, dpr: 1.75 },

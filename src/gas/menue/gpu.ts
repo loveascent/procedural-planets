@@ -12,6 +12,7 @@ export function abschnittGpu(p: Panel, k: MenueKontext): Panel {
       ['standard', t('Laptop / integrierte GPU', 'Laptop / integrated GPU')],
       ['high', t('Desktop-GPU', 'Desktop GPU')],
       ['ultra', t('High-End-GPU (z. B. RTX 4080/5080)', 'High-end GPU (e.g. RTX 4080/5080)')],
+      ['welt', t('Welt (eingebettet, klein)', 'World (embedded, small)')],
       ['phone04', t('Smartphone (alte Werte v0.4)', 'Smartphone (old v0.4 values)')],
       ['high04', t('Desktop-GPU (alte Werte v0.4)', 'Desktop GPU (old v0.4 values)')],
       ['ultra04', t('High-End-GPU (alte Werte v0.4)', 'High-end GPU (old v0.4 values)')],

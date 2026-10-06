@@ -2,8 +2,9 @@ import { presets, TABLE, type Preset, type RandomOptions } from '../presets';
 import { type Vec3 } from '../math';
 import { Panel } from '../ui';
 import { Sky } from '../sky/sky';
-import { S, isPhone, WARM_STEPS, SIM_FLOATS, RENDER_FLOATS, type Key, type CubeField, type FilmOptions, type Filmstrip, type Storm } from './zustand';
+import { S as S0, isPhone, WARM_STEPS, SIM_FLOATS, RENDER_FLOATS, type Key, type CubeField, type FilmOptions, type Filmstrip, type Storm } from './zustand';
 import { canvas } from './dom';
+import type { Ansicht } from './einbettung';
 import { onChange } from './reaktion';
 import { buildUI } from './menue';
 import { updateInfo } from './menue/steckbrief';
@@ -33,13 +34,20 @@ import { snapshot, remember, undo, redo, updateUndoButtons, restore, encode, dec
 declare const __VERSION__: string;
 
 export class App {
+  /** Eingebettet (Welt-Schicht): ohne Menü, Eingabe und eigene Leinwand; rendert in eine Textur der Größe `breite` × `hoehe`. */
+  kopflos: { breite: number; hoehe: number } | null = null;
+  /** Wo das Menü aufgebaut wird (Standard: `#panel-body` der Seite; eingebettet bestimmt die Welt den Platz). */
+  menuWurzel: HTMLElement | null = null;
+  /** Kameraübergabe von außen (eingebettet): überschreibt die eigene Bahnkamera. */
+  ansicht: Ansicht | null = null;
   // Testmodus #offscreen: rendert in eine Textur statt auf den Canvas (für Headless-Browser).
-  offscreen = location.hash.startsWith('#offscreen');
+  testTakt = location.hash.startsWith('#offscreen');
+  offscreen = this.testTakt;
   // Testmodus: #offscreen&warm=300 verkürzt das Vorrechnen (Software-Renderer sind langsam).
   warmSteps = Number(new URLSearchParams(location.hash.slice(1)).get('warm')) || WARM_STEPS;
-  format: GPUTextureFormat = this.offscreen ? 'rgba8unorm' : navigator.gpu.getPreferredCanvasFormat();
+  format: GPUTextureFormat = 'rgba8unorm';
   target: GPUTexture | null = null;
-  ctx = canvas.getContext('webgpu') as GPUCanvasContext;
+  ctx: GPUCanvasContext | null = null;
   sampler: GPUSampler;
   simBuf: GPUBuffer;
   renderBuf: GPUBuffer;
@@ -93,8 +101,15 @@ export class App {
   dpr = 1.75;
   panel!: Panel;
 
-  constructor(public device: GPUDevice) {
-    if (!this.offscreen) this.ctx.configure({ device, format: this.format, alphaMode: 'opaque' });
+  /** Einstellungen dieser Instanz (je Planet eigene; die Seite nutzt die gemeinsamen `S`). */
+  constructor(public device: GPUDevice, public S: typeof S0 = S0, kopflos: { breite: number; hoehe: number } | null = null) {
+    this.kopflos = kopflos;
+    if (kopflos) this.offscreen = true;
+    if (!this.offscreen) {
+      this.format = navigator.gpu.getPreferredCanvasFormat();
+      this.ctx = canvas.getContext('webgpu') as GPUCanvasContext;
+      this.ctx.configure({ device, format: this.format, alphaMode: 'opaque' });
+    }
     // clamp-to-edge: im Flächeninneren wird nie über den Rand hinaus gefiltert (das übernimmt sampleCube).
     this.sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
     this.simBuf = device.createBuffer({ size: SIM_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -127,16 +142,18 @@ export class App {
         { binding: 6, visibility: F, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       ],
     })] });
-    this.sky = new Sky(device, isPhone ? 512 : 1024);
-    this.sky.generate(String(S.seed) + S.preset);
+    this.sky = new Sky(device, kopflos ? 16 : isPhone ? 512 : 1024);
+    if (!kopflos) this.sky.generate(String(this.S.seed) + this.S.preset);
     this.dummy = this.cubeField(8);
     this.zonal = device.createBuffer({ size: 128 * 2 * 4, usage: GPUBufferUsage.STORAGE });
     this.applyQuality(true);  // Startwerte der Geräteklasse schon beim Laden
     this.applyPreset();
-    this.buildUI();
-    this.bindInput();
-    this.remember();
+    if (!kopflos) { this.buildUI(); this.bindInput(); this.remember(); }
   }
+
+  /** Breite und Höhe des Bildes (Leinwand der Seite oder Textur der eingebetteten Instanz). */
+  get W(): number { return this.kopflos ? this.kopflos.breite : canvas.width; }
+  get H(): number { return this.kopflos ? this.kopflos.hoehe : canvas.height; }
 
   buildPipes(seamless: boolean) { return buildPipes(this, seamless); }
   buildRenderPipe() { return buildRenderPipe(this); }

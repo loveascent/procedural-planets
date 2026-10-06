@@ -3,7 +3,11 @@
 import { BAUSTEINE, standardSchalter, type Schalter } from './bausteine.ts';
 import { finde, type Koerper, type V3, type Welt } from './physik/koerper.ts';
 import { erzeugeSystem, STANDARD_SYSTEM } from './physik/system.ts';
-import { weltSchritt, zeitRestZuruecksetzen } from './physik/schritt.ts';
+import { neueWelt } from './physik/koerper.ts';
+import * as speichern from './speichern.ts';
+import type { WeltStand } from './speichern.ts';
+import { bahnelemente } from './zeichnen/spuren.ts';
+import { interpolation, weltSchritt, zeitRestZuruecksetzen } from './physik/schritt.ts';
 import { planetGegenPlanet, naechsterPlanet, werfeAuf } from './physik/szenarien.ts';
 import { gesteinFuer } from './oberflaeche/backen.ts';
 import { starteGeraet } from './zeichnen/geraet.ts';
@@ -11,21 +15,43 @@ import { Kamera } from './zeichnen/kamera.ts';
 import { Texturen } from './zeichnen/texturen.ts';
 import { erstellePlanetenZeichner, INSTANZ_FLOATS, MAX_INSTANZEN } from './zeichnen/planetenZeichner.ts';
 import { erstelleLeuchtenZeichner, LEUCHT_FLOATS, MAX_LEUCHT } from './zeichnen/leuchtenZeichner.ts';
-import { erstelleLinienZeichner, MAX_LINIENPUNKTE } from './zeichnen/linienZeichner.ts';
+import { erstelleLinienZeichner, MAX_SEGMENTE, SEG_FLOATS } from './zeichnen/linienZeichner.ts';
 import { erstelleHimmelZeichner } from './zeichnen/himmelZeichner.ts';
 import { Spuren } from './zeichnen/spuren.ts';
 import { Blitze } from './zeichnen/blitze.ts';
 import { waehleStufen } from './zeichnen/lod.ts';
+import { erstelleGasEinbettung } from './zeichnen/gasEinbettung.ts';
+import { erstelleRockyEinbettung } from './zeichnen/rockyEinbettung.ts';
+import { erstelleEinblendung } from './zeichnen/einblendung.ts';
 import { U_BYTES, MAX_KUGELN } from './zeichnen/shader/gemeinsam.ts';
-import { baueOberflaeche, type Steuerung } from './oberflaeche/panel.ts';
+import { baueOberflaeche, WELT_STANDARD, type Steuerung } from './oberflaeche/panel.ts';
+import type { Settings } from '../ui.ts';
+import { FELS_BAUSTEINE, GAS_BAUSTEINE } from './typBausteine.ts';
 
 const SAUM: Record<string, number> = { erde: 0.65, wueste: 0.25, eis: 0.2, lava: 0.3, grau: 0 };
 
+/** Globale Qualitätsstufen: Auflösung der echten Planeten, Schwelle (Pixelradius), Gasriesen-Gerätestufe, Kartenauflösung des Gesteinsplaneten */
+const QUALITAET: Record<string, { aufl: number; anPx: number; gas: string; fels: number }> = {
+  // gleiche Gerätestufen wie die Seite des Gasriesen (phone/standard/high/ultra); Auflösung über 1 = Supersampling wie „Render-Auflösung“ der Seite
+  niedrig: { aufl: 0.5, anPx: 140, gas: 'phone', fels: 512 },
+  mittel: { aufl: 0.85, anPx: 100, gas: 'standard', fels: 1024 },
+  hoch: { aufl: 1.25, anPx: 80, gas: 'high', fels: 2048 },
+  ultra: { aufl: 1.75, anPx: 60, gas: 'ultra', fels: 2048 },
+};
+
 export async function startWelt() {
+  // Behälter im gemeinsamen Bedienfeld: Menü der Welt, dann (nur beim nahen Planeten) sein vollständiges Menü
+  const koerperMenue = document.getElementById('panel-body') as HTMLElement;
+  for (const id of ['welt-menue', 'editor-gas', 'editor-fels']) if (!document.getElementById(id)) { const d = document.createElement('div'); d.id = id; koerperMenue.append(d); }
   const canvas = document.getElementById('welt') as HTMLCanvasElement;
   const g = await starteGeraet(canvas);
   const { dev } = g;
-  const schalter: Schalter = standardSchalter();
+  // Alle Einstellungen der Welt in einem Objekt (wie bei den anderen Seiten): Schalter der Bausteine + Zahlen
+  const E: Settings = { ...standardSchalter(), ...WELT_STANDARD };
+  const schalter = E as unknown as Schalter;
+  for (const b of GAS_BAUSTEINE) E['g_' + b.schluessel] = b.standardAn;
+  for (const b of FELS_BAUSTEINE) E['f_' + b.schluessel] = b.standardAn;
+  const standard: Settings = { ...E };
   let seed = 1;
   let monde = schalter.monde;
   let w: Welt = erzeugeSystem({ ...STANDARD_SYSTEM, seed, monde });
@@ -36,30 +62,33 @@ export async function startWelt() {
   const leuchten = erstelleLeuchtenZeichner(dev, g.format, uni);
   const linien = erstelleLinienZeichner(dev, g.format, uni);
   const himmel = erstelleHimmelZeichner(dev, g.format, uni);
+  const gasE = erstelleGasEinbettung(dev, document.getElementById('editor-gas') as HTMLElement);
+  const felsE = erstelleRockyEinbettung(dev, document.getElementById('editor-fels') as HTMLElement);
+  const einblend = erstelleEinblendung(dev, g.format);
   const spuren = new Spuren();
   const blitze = new Blitze();
+  spuren.vorbelegen(w);
   const baueShader = () => planeten.baue({ atmosphaere: schalter.atmosphaere, finsternis: schalter.finsternis, lebendig: schalter.lebendig });
   baueShader();
 
   let fokus: number | null = null;
   let auswahl: number | null = null;
-  let tempo = 0.6;
+  let tempo = Math.pow(10, Number(E.tempoLog));
   let pause = false;
   let abstandZiel = 900;
   let letzterFokusOrt: V3 = [0, 0, 0];
-  let letzterSonnenwinkel: number | null = null;
-  const info = { fps: 0, teilschritte: 0, voll: [] as string[], punkte: 0, backen: 0 };
+  const info = { gas: 'aus', fels: 'aus', fps: 0, teilschritte: 0, voll: [] as string[], punkte: 0, backen: 0 };
   let jetzt = 0;
 
   const uData = new Float32Array(U_BYTES / 4);
   const inst = new Float32Array(MAX_INSTANZEN * INSTANZ_FLOATS);
   const leucht = new Float32Array(MAX_LEUCHT * LEUCHT_FLOATS);
-  const lin = new Float32Array(MAX_LINIENPUNKTE * 7);
+  const lin = new Float32Array(MAX_SEGMENTE * SEG_FLOATS);
 
   const sonne = () => w.koerper.find((k) => k.art === 'sonne');
 
   function setzeFokus(id: number | null, naehe?: number) {
-    fokus = id; letzterSonnenwinkel = null;
+    fokus = id;
     const k = id === null ? undefined : finde(w, id);
     const ziel: V3 = k ? k.p : [0, 0, 0];
     kam.setzeZiel(ziel, true);
@@ -73,7 +102,7 @@ export async function startWelt() {
   function neuesSystem(neuerSeed: number) {
     seed = neuerSeed; monde = schalter.monde;
     w = erzeugeSystem({ ...STANDARD_SYSTEM, seed, monde });
-    spuren.leeren(); blitze.zuruecksetzen(); zeitRestZuruecksetzen();
+    spuren.leeren(); spuren.vorbelegen(w); blitze.zuruecksetzen(); zeitRestZuruecksetzen();
     auswahl = null; setzeFokus(null);
   }
 
@@ -83,13 +112,83 @@ export async function startWelt() {
     if (!b) return;
     if (b.wirkt === 'pipeline') baueShader();
     if (b.wirkt === 'neustart') neuesSystem(seed);
-    if (key === 'spuren' && !an) spuren.leeren();
+    if (key === 'spuren') { if (an) spuren.vorbelegen(w); else spuren.leeren(); }
+  }
+
+  // ---------- Speichern und Laden ----------
+  function holeStand(name?: string): WeltStand {
+    return {
+      format: 'sonnensystem', version: 1, name, seed, zeit: w.zeit, naechsteId: w.naechsteId,
+      koerper: JSON.parse(JSON.stringify(w.koerper)),
+      einstellungen: JSON.parse(JSON.stringify(E)),
+      gas: gasE.holeEinstellungen(), fels: felsE.holeEinstellungen(), gasTyp: gasE.holeTyp(), felsTyp: felsE.holeTyp(),
+      kamera: { gier: kam.gier, neigung: kam.neigung, abstand: abstandZiel, fokus },
+    };
+  }
+  function ladeStand(s: WeltStand) {
+    seed = s.seed;
+    w = neueWelt(seed * 7919 + 13);
+    w.koerper = s.koerper; w.naechsteId = s.naechsteId; w.zeit = s.zeit;
+    Object.assign(E, s.einstellungen);
+    monde = !!E.monde;
+    tempo = Math.pow(10, Number(E.tempoLog)); pause = !!E.pause;
+    baueShader();
+    const st = QUALITAET[String(E.qualitaet)] ?? QUALITAET.mittel;
+    gasE.setzeQualitaet(st.gas); felsE.setzeQualitaet(st.fels);
+    gasE.setzeEinstellungen(s.gas ?? {}, s.gasTyp ?? {}); felsE.setzeEinstellungen(s.fels ?? {}, s.felsTyp ?? {});
+    spuren.leeren(); blitze.zuruecksetzen(); zeitRestZuruecksetzen(); tex.leeren();
+    auswahl = null;
+    setzeFokus(s.kamera?.fokus ?? null);
+    if (s.kamera) { kam.gier = s.kamera.gier; kam.neigung = s.kamera.neigung; abstandZiel = s.kamera.abstand; }
+    panel.refresh();
+  }
+
+  /** Steckbrief eines Körpers: Eigenschaften, Bahn aus der Weltphysik und (wenn er gerade echt gerechnet wird) die Werte der Simulation. */
+  /** „Nur Auswahl zeigen“: sichtbar bleiben Sonne, die Auswahl, ihre Monde bzw. ihr Planet. */
+  const sichtbar = (k: Koerper): boolean => {
+    if (!E.nurAuswahl || auswahl === null) return true;
+    const a = finde(w, auswahl);
+    return !a || k.id === a.id || k.art === 'sonne' || k.eltern === a.id || k.id === a.eltern;
+  };
+
+  /** Adresse der Seite des Planeten-Editors mit diesem Planeten (Seed, Vorlage, Einstellungen). */
+  function editorUrl(id: number): string | null {
+    const k = finde(w, id);
+    if (!k || (k.art !== 'gas' && k.art !== 'gestein')) return null;
+    if (k.art === 'gas') {
+      const code = gasE.planetenCode(id);
+      return code ? `index.html?body=gas&code=${encodeURIComponent(code)}` : `index.html?body=gas`;
+    }
+    const q = new URLSearchParams({ body: 'rocky', seed: String(k.seed) });
+    for (const [key, v] of Object.entries(felsE.holeEinstellungen()[id] ?? {})) if (typeof v === 'number') q.set(key, String(v));
+    return `index.html?${q.toString()}`;
+  }
+
+  function fakten(id: number): [string, string][] {
+    const k = finde(w, id);
+    if (!k) return [];
+    const f3 = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(2));
+    const art = { sonne: 'Stern', gas: 'Gasriese', gestein: 'Gesteinsplanet', mond: 'Mond' }[k.art];
+    const z: [string, string][] = [['Typ', art], ['Seed', String(k.seed)]];
+    if (k.vorlage) z.push(['Vorlage', k.vorlage]);
+    z.push(['Radius', f3(k.r)], ['Masse', f3(k.m)], ['Dichte', f3(k.m / ((4 / 3) * Math.PI * k.r ** 3))], ['Fluchtgeschwindigkeit', f3(Math.sqrt((2 * k.m) / k.r))]);
+    if (k.spinRate) z.push(['Eigendrehung', `${(Math.abs((2 * Math.PI) / k.spinRate)).toFixed(0)} s${k.spinRate < 0 ? ' (rückläufig)' : ''}`]);
+    const so = sonne();
+    const eltern = (k.eltern >= 0 ? finde(w, k.eltern) : undefined) ?? so;
+    if (eltern && k.art !== 'sonne') {
+      const el = bahnelemente(k, eltern);
+      const abstand = Math.hypot(k.p[0] - eltern.p[0], k.p[1] - eltern.p[1], k.p[2] - eltern.p[2]);
+      const v = Math.hypot(k.v[0] - eltern.v[0], k.v[1] - eltern.v[1], k.v[2] - eltern.v[2]);
+      z.push(['Bahn um', eltern.name], ['Abstand', f3(abstand)], ['Bahngeschwindigkeit', `${f3(v)} /s`]);
+      if (el) z.push(['Umlaufzeit', Number.isFinite(el.periode) ? `${el.periode.toFixed(0)} s` : 'ungebunden'], ['Exzentrizität', el.e.toFixed(3)]);
+    }
+    const live = [...gasE.fakten(id), ...felsE.fakten(id)];
+    if (live.length) { z.push(['— echte Simulation —', '']); z.push(...live); }
+    return z;
   }
 
   const ste: Steuerung = {
-    schalter, setzeSchalter,
-    tempo: () => tempo, setzeTempo: (t) => { tempo = t; },
-    pause: () => pause, setzePause: (p) => { pause = p; },
+    editorUrl, fakten, holeStand, ladeStand,
     koerper: () => w.koerper, auswahl: () => auswahl, fokus: () => fokus,
     waehle: (id) => { auswahl = id; },
     fliegeHin: (id) => { auswahl = id; setzeFokus(id); },
@@ -110,7 +209,20 @@ export async function startWelt() {
     },
     info: () => ({ ...info, koerper: w.koerper.length, truemmer: w.truemmer.n, zeit: w.zeit, verworfen: w.verworfen, ereignisse: w.ereignisse.length }),
   };
-  baueOberflaeche(ste);
+  const wirkt = (key: string) => {
+    if (key === 'qualitaet') {
+      const st = QUALITAET[String(E.qualitaet)] ?? QUALITAET.mittel;
+      E.aufl = st.aufl; E.anPx = st.anPx;
+      gasE.setzeQualitaet(st.gas); felsE.setzeQualitaet(st.fels);
+      panel.refresh();
+    } else if (key === 'tempoLog') tempo = Math.pow(10, Number(E.tempoLog));
+    else if (key === 'pause') pause = !!E.pause;
+    else if (key.startsWith('g_')) gasE.setzeTyp(key.slice(2), !!E[key]);
+    else if (key.startsWith('f_')) felsE.setzeTyp(key.slice(2), !!E[key]);
+    else if (BAUSTEINE.some((b) => b.schluessel === key)) setzeSchalter(key, !!E[key]);
+  };
+  const panel = baueOberflaeche(ste, E, standard, wirkt);
+  wirkt('qualitaet');   // Startstufe auf Auflösung und Schwellen anwenden
 
   // ---------- Eingabe ----------
   const zeiger = new Map<number, { x: number; y: number }>();
@@ -137,7 +249,7 @@ export async function startWelt() {
     if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'SELECT') return;
     if (e.key === 'Escape') setzeFokus(null);
     else if (e.key === 'f' && auswahl !== null) setzeFokus(auswahl);
-    else if (e.key === ' ') { pause = !pause; e.preventDefault(); }
+    else if (e.key === ' ') { E.pause = !E.pause; pause = !!E.pause; panel.refresh(); e.preventDefault(); }
   });
 
   function waehleAm(nx: number, ny: number): number | null {
@@ -165,23 +277,24 @@ export async function startWelt() {
     const [W, H] = g.groesse();
 
     if (!pause) {
-      info.teilschritte = weltSchritt(w, dt, tempo, { planetenZiehen: schalter.planetenZiehen, kollision: schalter.kollision, truemmer: schalter.truemmer });
+      info.teilschritte = weltSchritt(w, dt, tempo, { planetenZiehen: schalter.planetenZiehen, kollision: schalter.kollision, truemmer: schalter.truemmer, ls12: schalter.ls12 });
       const t = w.truemmer;
       for (let i = 0; i < t.n; i++) t.alter[i] += dt * tempo;
     }
     if (schalter.spuren) spuren.aktualisiere(w);
     if (schalter.blitze) blitze.uebernimm(w, jetzt); else blitze.zuruecksetzen();
 
+    // Bildinterpolation: zwischen dem Zustand vor und nach dem letzten Teilschritt (am Ende des Bildes wieder zurückgesetzt),
+    // sonst springen die Körper bei kleinem Tempo nur alle paar Bilder um einen Teilschritt weiter
+    const al = pause ? 1 : interpolation();
+    const echt = w.koerper.map((k) => ({ p: [k.p[0], k.p[1], k.p[2]] as V3, s: k.spin }));
+    for (const k of w.koerper) { for (let c = 0; c < 3; c++) k.p[c] = k.pv[c] + (k.p[c] - k.pv[c]) * al; k.spin = k.spinV + (k.spin - k.spinV) * al; }
+    const trEcht = w.truemmer.p.slice(0, 3 * w.truemmer.n);
+    for (let i = 0; i < 3 * w.truemmer.n; i++) w.truemmer.p[i] = w.truemmer.pv[i] + (w.truemmer.p[i] - w.truemmer.pv[i]) * al;
+
     // Fokus verfolgen; verschwindet der Körper (verschmolzen), bleibt die Kamera am letzten Ort
     if (fokus !== null) { const k = finde(w, fokus); if (k) letzterFokusOrt = [k.p[0], k.p[1], k.p[2]]; else { fokus = null; } }
     kam.setzeZiel(fokus === null ? (letzterFokusOrt = [0, 0, 0]) : letzterFokusOrt, false);
-    // Die Kamera dreht mit, damit die Sonnenseite des Fokuskörpers sichtbar bleibt, während er die Sonne umkreist
-    const fk = fokus === null ? undefined : finde(w, fokus), sk = sonne();
-    if (fk && sk && fk.art !== 'sonne') {
-      const wnk = Math.atan2(sk.p[0] - fk.p[0], sk.p[2] - fk.p[2]);
-      if (letzterSonnenwinkel !== null) { let d = wnk - letzterSonnenwinkel; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; kam.gier += d; }
-      letzterSonnenwinkel = wnk;
-    } else letzterSonnenwinkel = null;
     kam.abklingen(dt);
     kam.abstand += (abstandZiel - kam.abstand) * (1 - Math.exp(-dt * 4));
     if (auswahl !== null && !finde(w, auswahl)) auswahl = null;
@@ -208,19 +321,30 @@ export async function startWelt() {
     uData.set([sr[0], sr[1], sr[2], so ? so.r : 1], 28);
     const pixelProRadiant = H / kam.fov;
     // Schatten-Kugeln: die nächsten 64 (ohne Sonne)
-    const sph = w.koerper.filter((k) => k.art !== 'sonne').map((k) => ({ k, d: (k.p[0] - auge[0]) ** 2 + (k.p[1] - auge[1]) ** 2 + (k.p[2] - auge[2]) ** 2 })).sort((a, c) => a.d - c.d).slice(0, MAX_KUGELN);
+    const sph = w.koerper.filter((k) => k.art !== 'sonne' && sichtbar(k)).map((k) => ({ k, d: (k.p[0] - auge[0]) ** 2 + (k.p[1] - auge[1]) ** 2 + (k.p[2] - auge[2]) ** 2 })).sort((a, c) => a.d - c.d).slice(0, MAX_KUGELN);
     sph.forEach(({ k }, i) => { const r = rel(k.p); uData.set([r[0], r[1], r[2], k.r], 36 + 4 * i); });
-    uData.set([pixelProRadiant, schalter.finsternis ? sph.length : 0, 0, 0], 32);
+    uData.set([pixelProRadiant, schalter.finsternis ? sph.length : 0, 2 / W, 2 / H], 32);
     dev.queue.writeBuffer(uni, 0, uData.buffer, 0, U_BYTES);
 
+    // Echter Gasriese (eigene Instanz der Gasriesen-Bausteine) für den nächsten großen Gasriesen
+    // Instanzen rechnen in Bildschirmauflösung × „Auflösung der echten Planeten“, die Einblendung skaliert sie auf das Bild
+    const aufl = Math.min(2, Math.max(0.2, Number(E.aufl)));
+    const sicht = w.koerper.filter(sichtbar);
+    const kontext = { koerper: sicht, auge, vp, breite: Math.max(16, Math.round(W * aufl)), hoehe: Math.max(16, Math.round(H * aufl)), tanHalbFov: Math.tan(kam.fov / 2), pixelProRadiant: H / kam.fov, sonneRel: sr as V3, dt: dt * (pause ? 0 : 1), dtReal: dt, anPx: Number(E.anPx), einschwingen: Number(E.einschwingen), neuGebacken: (b: Koerper) => tex.neuBacken(b), vor: b.vor, oben: b.oben, fov: kam.fov, aspekt: W / H };
+    const ein = gasE.aktualisiere(kontext, schalter.gasLive);
+    info.gas = gasE.status;
+    const einFels = felsE.aktualisiere(kontext, schalter.felsLive);
+    info.fels = felsE.status;
+
     // Stufen und Kugel-Instanzen
-    const lod = waehleStufen(w.koerper, auge, pixelProRadiant, schalter.lod);
+    const lod = waehleStufen(sicht, auge, pixelProRadiant, schalter.lod);
     info.voll = lod.voll.map((k) => k.name);
     let ni = 0, nl = 0, punkte = 0;
     const farbePunkt = (k: Koerper): [number, number, number] => k.art === 'sonne' ? [1, 0.85, 0.5] : k.art === 'gas' ? [0.85, 0.75, 0.55] : k.art === 'mond' ? [0.6, 0.6, 0.62] : [0.75, 0.7, 0.65];
-    for (const k of w.koerper) {
+    for (const k of sicht) {
       const stufe = lod.stufen.get(k.id)!;
       const r = rel(k.p);
+      if (k.id === gasE.ausgeblendet || k.id === felsE.ausgeblendet) continue;   // die echte Instanz deckt ihn vollständig
       if (stufe === 'punkt') {
         if (nl < MAX_LEUCHT - 8) { leucht.set([r[0], r[1], r[2], k.r, ...farbePunkt(k), 0.9, 2, 0, 0, 0], nl * LEUCHT_FLOATS); nl++; punkte++; }
         continue;
@@ -252,7 +376,22 @@ export async function startWelt() {
     }
     leuchten.setze(leucht, nl);
 
-    const nlin = schalter.spuren ? spuren.fuelle(w, auge, lin) : 0;
+    // Sichtbarkeit der Bahnlinien (0…1, stetig): im Nahbereich eines Körpers nur seine eigene Bahn, die seines Planeten und die seiner Monde;
+    // Mondbahnen erst, wenn man nah genug an ihrem Planeten ist. So bleibt es im Überblick vollständig und sonst ruhig.
+    const fk = fokus !== null ? finde(w, fokus) : undefined;
+    const glatt = (a: number, c: number, x: number) => { const s = Math.min(1, Math.max(0, (x - a) / (c - a))); return s * s * (3 - 2 * s); };
+    const roh = new Map<number, { p: V3 }>(); w.koerper.forEach((k, i) => roh.set(k.id, echt[i]));
+    const bahnSicht = (k: Koerper, z: Koerper, a: number): number => {
+      if (!sichtbar(k)) return 0;
+      let f = 1;
+      if (k.art === 'mond') {
+        const dz = Math.hypot(z.p[0] - auge[0], z.p[1] - auge[1], z.p[2] - auge[2]);
+        f = 1 - glatt(25, 80, dz / Math.max(a, 1e-3));
+      }
+      if (fk && fk.art !== 'sonne' && k.id !== fk.id && k.id !== fk.eltern && k.eltern !== fk.id) f *= glatt(30, 90, kam.abstand / fk.r);
+      return f;
+    };
+    const nlin = schalter.spuren ? spuren.fuelle(w, auge, lin, schalter.mondbahnen, bahnSicht, roh) : 0;
     linien.setze(lin, nlin);
 
     const enc = dev.createCommandEncoder();
@@ -262,14 +401,18 @@ export async function startWelt() {
     });
     if (schalter.himmel) himmel.zeichne(pass);
     planeten.zeichne(pass);
+    if (ein) einblend.zeichne(pass, ein.tex, vp, ein.mitte, ein.radius, ein.deck, W, H);
+    if (einFels) einblend.zeichne(pass, einFels.tex, vp, einFels.mitte, einFels.radius, einFels.deck, W, H, 1);
     if (schalter.spuren) linien.zeichne(pass);
     leuchten.zeichne(pass);
     pass.end();
     dev.queue.submit([enc.finish()]);
+    w.koerper.forEach((k, i) => { k.p[0] = echt[i].p[0]; k.p[1] = echt[i].p[1]; k.p[2] = echt[i].p[2]; k.spin = echt[i].s; });
+    w.truemmer.p.set(trEcht);
     requestAnimationFrame(bild);
   }
   requestAnimationFrame(bild);
 
   // Prüf- und Einstiegspunkt für Werkzeuge (Bildvergleich, Selbsttest)
-  (window as unknown as { welt: unknown }).welt = { ste, kam, get w() { return w; }, schalter, setzeFokus, tex, info };
+  (window as unknown as { welt: unknown }).welt = { ste, kam, get w() { return w; }, schalter, E, wirkt, setzeSchalter, setzeFokus, tex, info, panel, gasE, felsE, speichern };
 }

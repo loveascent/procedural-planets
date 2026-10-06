@@ -1,12 +1,12 @@
 // Modul „Zustand merken“: eingeschwungenen Zustand im Browser speichern (IndexedDB) und wieder laden.
 import type { App } from './app';
 import { showLoading } from './dom';
-import { S, VIEW_ONLY, CubeField } from './zustand';
+import { VIEW_ONLY, CubeField } from './zustand';
 
 /** Schlüssel: alle Regler, die die Rechnung beeinflussen, plus Lauf-Nummer. Andere Werte = anderer Zustand. */
 export function stateKey(app: App): string {
   const o: Record<string, unknown> = { run: app.runSeed, warm: app.warmSteps };
-  for (const [k, v] of Object.entries(S)) if (!VIEW_ONLY.has(k)) o[k] = v;
+  for (const [k, v] of Object.entries(app.S)) if (!VIEW_ONLY.has(k)) o[k] = v;
   return JSON.stringify(o);
 }
 
@@ -35,7 +35,7 @@ export async function readField(app: App, f: CubeField): Promise<ArrayBuffer> {
 }
 
 export async function saveState(app: App) {
-  if (!S.remember || app.offscreen) return;
+  if (!app.S.remember || app.offscreen) return;
   try {
     const key = app.stateKey();
     const fields = await Promise.all(app.fieldsToKeep().map((f) => app.readField(f)));

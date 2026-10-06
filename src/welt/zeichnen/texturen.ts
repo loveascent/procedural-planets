@@ -51,7 +51,21 @@ export class Texturen {
     if (s === undefined) return;
     this.scheibeVon.set(k.id, s);
     const art: Art = k.art;
-    this.auftraege.push({ id: k.id, scheibe: s, gen: backe(art, k.seed) });
+    this.auftraege.push({ id: k.id, scheibe: s, gen: backe(art, k.seed, k.vorlage) });
+  }
+
+  /** Körper hat sich geändert (Seed oder Vorlage aus dem Menü): Oberfläche neu backen; bis dahin bleibt die alte stehen. */
+  neuBacken(k: Koerper) {
+    const s = this.scheibeVon.get(k.id);
+    if (s === undefined) return;
+    this.auftraege = this.auftraege.filter((a) => a.id !== k.id);
+    this.auftraege.push({ id: k.id, scheibe: s, gen: backe(k.art, k.seed, k.vorlage) });
+  }
+
+  /** Alles verwerfen (z. B. nach dem Laden eines gespeicherten Systems): alle Körper werden neu gebacken. */
+  leeren() {
+    this.auftraege = []; this.scheibeVon.clear(); this.fertig.clear();
+    this.frei = []; for (let i = SCHEIBEN - 1; i >= 1; i--) this.frei.push(i);
   }
 
   freigeben(lebendeIds: Set<number>) {

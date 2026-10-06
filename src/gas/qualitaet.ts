@@ -2,17 +2,17 @@
 import type { App } from './app';
 import { t } from '../i18n';
 import { loadNote, canvas } from './dom';
-import { QUALITY, S, STEP_BUDGET_MS, AUTO_TIERS } from './zustand';
+import { QUALITY, STEP_BUDGET_MS, AUTO_TIERS } from './zustand';
 
 export function applyQuality(a: App, fromUI: boolean) {
-  const q = QUALITY[S.quality];
+  const q = QUALITY[a.S.quality];
   if (fromUI && q) {
-    const f = S.look === 'dye' && q.fluid ? q.fluid : null;
-    S.velRes = f ? f.velRes : q.velRes; S.dyeRes = q.dyeRes; S.curlRes = q.curlRes; S.particles = q.particles;
-    S.pixelDensity = f ? f.dpr : q.dpr;
-    if (q.iterations) S.iterations = q.iterations;
+    const f = a.S.look === 'dye' && q.fluid ? q.fluid : null;
+    a.S.velRes = f ? f.velRes : q.velRes; a.S.dyeRes = q.dyeRes; a.S.curlRes = q.curlRes; a.S.particles = q.particles;
+    a.S.pixelDensity = f ? f.dpr : q.dpr;
+    if (q.iterations) a.S.iterations = q.iterations;
   }
-  a.dpr = S.pixelDensity;
+  a.dpr = a.S.pixelDensity;
   a.allocVel();
   a.allocDye();
   a.allocParticles();
@@ -22,20 +22,20 @@ export function applyQuality(a: App, fromUI: boolean) {
 export function calibrate(a: App) {
   a.calibrated = true;
   if (a.stepMs <= STEP_BUDGET_MS || a.downgrades >= 3) return;
-  const idx = AUTO_TIERS.findIndex(([, dye]) => dye < S.dyeRes);
+  const idx = AUTO_TIERS.findIndex(([, dye]) => dye < a.S.dyeRes);
   if (idx < 0) return;
-  [S.velRes, S.dyeRes] = AUTO_TIERS[idx];
+  [a.S.velRes, a.S.dyeRes] = AUTO_TIERS[idx];
   a.downgrades++;
   a.allocVel();
   a.allocDye();
   a.panel.refresh();
   a.warmStart = performance.now();
-  loadNote.textContent = t(`Qualität für 60 fps angepasst (${S.velRes}² / ${S.dyeRes}²)`, `Quality adjusted for 60 fps (${S.velRes}² / ${S.dyeRes}²)`);
+  loadNote.textContent = t(`Qualität für 60 fps angepasst (${a.S.velRes}² / ${a.S.dyeRes}²)`, `Quality adjusted for 60 fps (${a.S.velRes}² / ${a.S.dyeRes}²)`);
 }
 
 /** Dynamische Render-Auflösung: unter 56 fps kleiner, bei stabilen 60 fps langsam wieder größer. */
 export function adaptScale(a: App, real: number) {
-  if (!S.autoQuality) { a.renderScale = 1; return; }
+  if (!a.S.autoQuality) { a.renderScale = 1; return; }
   a.scaleAcc += real; a.scaleFrames++;
   if (a.scaleAcc < 1) return;
   const fps = a.scaleFrames / a.scaleAcc;
@@ -45,8 +45,9 @@ export function adaptScale(a: App, real: number) {
 }
 
 export function resize(a: App) {
+  if (a.kopflos) return;   // eingebettet: Größe legt die Welt fest
   // Pixeldichte direkt aus dem Regler: über der Bildschirmdichte = Supersampling (schärfer, teurer).
-  const dpr = a.dpr * (S.autoQuality ? a.renderScale : 1);
+  const dpr = a.dpr * (a.S.autoQuality ? a.renderScale : 1);
   const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
   const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
   if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }

@@ -20,7 +20,7 @@ export function createReaktion(ext) {
     if (k === 'profile') { Object.assign(S, { modClouds: DEF.modClouds, modAtmo: DEF.modAtmo, modShadows: DEF.modShadows, modBloom: DEF.modBloom, modFlare: DEF.modFlare, volcanoOn: DEF.volcanoOn, rivers: DEF.rivers, detail: DEF.detail }); RS.transKey = ''; menu.panel?.refresh(); regenerate(); return; }
     if (k === 'res' || k === 'erosion' || k === 'volcanoes' || k === 'volcanoOn' || k === 'volcanoType' || k === 'rivers' || k === 'riverAmount') { regenerate(); }
     else if (k === 'modAtmo') { RS.transKey = ''; }
-    else if (k === 'msaa') { const u = new URL(location.href); u.searchParams.set('msaa', String(S.msaa)); u.searchParams.set('seed', S.seed); location.href = u.toString(); }
+    else if (k === 'msaa' && !ext.kopflos) { const u = new URL(location.href); u.searchParams.set('msaa', String(S.msaa)); u.searchParams.set('seed', S.seed); location.href = u.toString(); }
     else if (it.regen === 'sky') { if (S.nebula > 0 || S.stars > 0) queueSky(); }
     else if (k === 'sea') { ext.seaH = seaFromFraction(S.sea); ext.lutDirty = true; clearTimeout(ext.riverT); ext.riverT = setTimeout(() => { if (S.rivers === 2) regenerate(); else buildRiverLines(); }, 400); }
     else if (k === 'lang') buildUI();
@@ -37,7 +37,7 @@ export function createReaktion(ext) {
     ext.PP = planetParams(S.seed);
     S.sea = ext.PP.water;
     S.cover = ext.PP.cloudCover;
-    try { const u = new URL(location.href); u.searchParams.set('seed', S.seed); history.replaceState(null, '', u); } catch {}
+    if (!ext.kopflos) try { const u = new URL(location.href); u.searchParams.set('seed', S.seed); history.replaceState(null, '', u); } catch {}
     buildUI();
     if (ext.device) regenerate();
   }

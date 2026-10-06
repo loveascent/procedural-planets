@@ -6,7 +6,7 @@ import { controls, addItem, itemByKey } from './regler.js';
 // Menü: dasselbe Panel wie beim Gasriesen (ⓘ-Erklärung, Blase beim Drüberfahren, Doppelklick = zurücksetzen).
 // Regler des anderen Stils stehen ausgegraut in einem eigenen Abschnitt ganz unten.
 // Alles, was dem Planeten gehört, kommt über `ext` herein; dieser Baustein kennt weder GPU noch Karten.
-// ext: { S, DEF, getPP, newSeed, setStyle, changed, randomSeed, lutCanvas, coarse, $ }
+// ext: { S, DEF, getPP, newSeed, setStyle, changed, randomSeed, lutCanvas, coarse, $, kopflos }
 export function createMenu(ext) {
   const { S, DEF, newSeed, setStyle, changed, randomSeed, lutCanvas, coarse, $ } = ext;
   let panel = null;
@@ -48,6 +48,7 @@ export function createMenu(ext) {
       root.lastElementChild.classList.add('inactive');
       for (const it of inactive) { addItem(panel, it); panel.disable(it.k, true); }
     }
+    if (!ext.kopflos) {   // Kopf, Titel und Fußzeile gehören der Seite des Gesteinsplaneten, nicht der eingebetteten Instanz
     initShell('rocky');
     $('t-title').textContent = t('Gesteinsplanet', 'Rocky planet');
     $('version').textContent = __VERSION__;
@@ -58,6 +59,7 @@ export function createMenu(ext) {
       'Echtzeit-WebGPU, keine Bilddateien. Grundform nach <a href="https://github.com/colordodge/ProceduralPlanet" target="_blank" rel="noopener">colordodge/ProceduralPlanet</a> (WTFPL). Idee: loveascent. <a href="https://github.com/loveascent/procedural-planets" target="_blank" rel="noopener">Quellcode</a>',
       'Real-time WebGPU, no image files. Base shape after <a href="https://github.com/colordodge/ProceduralPlanet" target="_blank" rel="noopener">colordodge/ProceduralPlanet</a> (WTFPL). Idea: loveascent. <a href="https://github.com/loveascent/procedural-planets" target="_blank" rel="noopener">Source code</a>');
     document.documentElement.lang = lang;
+    }
   }
   return { buildUI, get panel() { return panel; } };
 }

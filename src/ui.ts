@@ -28,18 +28,19 @@ export class Panel {
     public defaults?: Settings,
   ) {
     // Blase und Erklärfenster liegen fest über der Seite und verschieben nie die Regler.
-    document.getElementById('tip')?.remove();
-    document.getElementById('detail')?.remove();
-    this.tip = document.createElement('div');
+    // Blase und Erklärfenster gibt es nur einmal je Seite (mehrere Panels, z. B. in der Welt, teilen sie)
+    const alteTip = document.getElementById('tip'), alterDetail = document.getElementById('detail');
+    this.tip = alteTip ?? document.createElement('div');
     this.tip.id = 'tip';
     this.tip.className = 'tip';
     this.tip.hidden = true;
-    this.detail = document.createElement('section');
+    this.detail = (alterDetail as HTMLElement | null) ?? document.createElement('section');
     this.detail.id = 'detail';
     this.detail.className = 'detail';
     this.detail.hidden = true;
     this.detail.setAttribute('aria-live', 'polite');
-    document.body.append(this.tip, this.detail);
+    if (!alteTip) document.body.append(this.tip);
+    if (!alterDetail) document.body.append(this.detail);
     this.body = document.createElement('div');
     this.body.className = 'controls';
     root.append(this.body);
