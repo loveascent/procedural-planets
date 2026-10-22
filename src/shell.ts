@@ -40,7 +40,7 @@ const VERSIONS: [string, string, string][] = [
   ['planets-v24.html', 'Gesteinsplanet v24 (eingefroren)', 'Rocky planet v24 (frozen)'],
   ['planets-v25.html', 'Gesteinsplanet v25 (eingefroren)', 'Rocky planet v25 (frozen)'],
 ];
-const ONLINE = 'https://loveascent.github.io/procedural-planets/demo/';
+const ONLINE = 'https://loveascent.github.io/procedural-planets/';
 
 /** Link auf die Seite eines Planetentyps. Alle Seiten liegen im selben Ordner (Build, demo/, Entwicklung).
  *  Eine einzeln gespeicherte Datei (file://, z. B. im Download-Ordner) hat keine Nachbarn: dann die Online-Fassung. */

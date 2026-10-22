@@ -2,9 +2,7 @@
 
 ## Author — the person this project is owed to
 
-This project is owed to **loveascent**. 
-**loveascent**: idea, concept, goals, project lead,
-evaluation on real hardware, and the decisive expert objections during development, including:
+This project is owed to **loveascent**: idea, concept, goals, project lead, evaluation on real hardware, and the decisive expert objections during development, including:
 - the question about atmospheric thickness (led to the finding “the deformation radius is missing”),
 - “the maths behaves like a 10×10 cm object, not 1000 km” (led to the Rossby/Reynolds regime
   analysis, see [docs/STATUS.md](docs/STATUS.md)),

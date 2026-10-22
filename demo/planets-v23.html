@@ -428,7 +428,7 @@ function buildUI() {
   // in demo/ liegen beide Seiten nebeneinander
   if (/\/demo\/[^/]*$/.test(location.pathname)) $('to-gas').href = 'index.html';
   // Einzeln gespeicherte Datei (file://, z. B. aus dem Download-Ordner): Nachbarseite liegt nicht daneben -> Online-Fassung
-  if (location.protocol === 'file:' && !/procedural-planets\/(demo|demos)\//.test(location.pathname)) $('to-gas').href = 'https://loveascent.github.io/procedural-planets/demo/index.html';
+  if (location.protocol === 'file:' && !/procedural-planets\/(demo|demos)\//.test(location.pathname)) $('to-gas').href = 'https://loveascent.github.io/procedural-planets/index.html';
   $('lang').textContent = lang === 'de' ? 'EN' : 'DE';
   $('st-plus').textContent = t('+20 % besser', '+20 % better');
   $('st-orig').textContent = 'Original 1:1';

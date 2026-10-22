@@ -2,10 +2,7 @@
 
 ## Urheber: wem das Projekt zu verdanken ist
 
-Dieses Projekt ist **loveascent** zu verdanken. 
-
-**loveascent**: Idee, Konzept, Zielsetzung,
-Projektleitung, Bewertung der Ergebnisse auf echter Hardware und die entscheidenden fachlichen
+Dieses Projekt ist **loveascent** zu verdanken: Idee, Konzept, Zielsetzung, Projektleitung, Bewertung der Ergebnisse auf echter Hardware und die entscheidenden fachlichen
 Einwände während der Entwicklung, unter anderem:
 - die Frage nach der Atmosphärendicke (führte zum Befund „Deformationsradius fehlt“),
 - „die Mathematik wirkt wie für ein 10×10-cm-Objekt, nicht für 1000 km“ (führte zur

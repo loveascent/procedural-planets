@@ -9,14 +9,15 @@ Anyone redistributing this work or a derivative work must include this NOTICE fi
 
 Implemented with the help of Claude (Anthropic) as an AI programming assistant.
 
-Third-party source code: demos/planets.html contains a WGSL port of 3D simplex noise from
-webgl-noise (MIT, Copyright 2011 Ashima Arts / 2011-2022 Stefan Gustavson) and the "Hash without
-Sine" functions (MIT, Copyright 2014 David Hoskins); their license text is included in that file.
+Third-party source code: src/rocky/shader/noise.js, src/rocky/main.js and src/sky/sky_common.wgsl
+(and the built single files in demo/) contain a WGSL port of 3D simplex noise from webgl-noise
+(MIT, Copyright 2011 Ashima Arts / 2011-2022 Stefan Gustavson) and the "Hash without Sine"
+functions (MIT, Copyright 2014 David Hoskins); their license text is included next to the code.
 Everything else is written for this project. Adopted methods and ideas are listed with their
 sources in CREDITS.md.
 
 ---
 
 Urheber (Idee, Konzept, Projektleitung, Bewertung): loveascent
-Wer das Werk oder ein abgeleitetes Werk
-weitergibt, muss diese NOTICE-Datei mitliefern und soll nach CITATION.cff zitieren.
+Wer das Werk oder ein abgeleitetes Werk weitergibt, muss diese NOTICE-Datei mitliefern
+und soll nach CITATION.cff zitieren.
