@@ -114,14 +114,14 @@ fn aces(x: vec3f) -> vec3f { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 *
     let t1 = -bq + sq;
     t = t0;
     var tp = t0;
-    for (var i = 0; i < select(90, 2, DBG == 2); i++) {
+    for (var i = 0; i < select(160, 2, DBG == 2); i++) {
       let p = ro + rd * t;
       let r = length(p);
       let foot = pix * t;
       let gap = r - (1.0 + heightAt(p / r, lodFor(foot) * 0.6));
       if (gap < foot * 0.15) { hit = true; break; }
       tp = t;
-      t += max(gap * 0.75, foot * 0.05);
+      t += max(gap * 0.5, foot * 0.05);
       if (t > t1) { break; }
     }
     if (hit) {
@@ -152,16 +152,19 @@ fn aces(x: vec3f) -> vec3f { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 *
     var albedo = Bt.rgb * Bt.rgb;
     let gloss = Bt.a;
     let heat = Ct.r * Ct.r * 16.0;
+    // Sprünge der Kraterzellen liefern im Differenzenquotienten riesige Steigungen: begrenzen, sonst schwarze Punkte
     var g = A.yzw * RUF.b.z;
     var det = Det(vec3f(0.0), 1.0);
 ${detail}
     g += det.g * RUF.b.z * RUF.b.w;
+    let gl = length(g);
+    if (gl > 1.0) { g *= 1.0 / gl; }
     albedo *= mix(1.0, det.br, RUF.b.w);
     let n = normalize(d - g / (1.0 + A.x));
     let mu0 = dot(n, sunB);
     let mu = max(dot(n, -rd), 0.02);
     var sh = 1.0;
-    if (DBG >= 4) { return vec4f(albedo * max(mu0, 0.0) * sunI, 1.0); }
+    if (DBG == 4) { return vec4f(albedo * max(mu0, 0.0) * sunI, 1.0); }
     if (RUF.b.x > 0.0 && dot(d, sunB) > -0.35) {
       sh = mix(1.0, shadowRay(p + d * 0.0004, sunB, hmax, lod, 14.0), RUF.b.x);
     } else if (dot(d, sunB) <= -0.35) { sh = 0.0; }
