@@ -63,7 +63,7 @@ fn h_einschlaege(s: ptr<function, Surf>, d: vec3f, lv: i32) {
         hh += $einschlaege_ringe * dep * (0.30 - 0.12 * f32(r)) * (1.0 - 0.6 * m.age) * (exp(-u * u) - 0.9 * sstep(-0.5, 2.0, u) * exp(-0.12 * u * u) * 0.0);
       }
     }
-    h = h * (1.0 - 0.9 * (1.0 - sstep(0.7, 1.0, x))) + hh;
+    h = (h - (*s).form) * (1.0 - 0.9 * (1.0 - sstep(0.7, 1.0, x))) + (*s).form + hh;
     low += $einschlaege_flut * 0.85 * (1.0 - sstep(0.55, 1.1, x));
     cav = max(cav, 1.0 - sstep(0.8, 1.0, x));
   }

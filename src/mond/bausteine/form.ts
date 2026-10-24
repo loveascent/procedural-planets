@@ -24,6 +24,7 @@ fn h_form(s: ptr<function, Surf>, d: vec3f, lv: i32) {
     r += $form_beulen * mix(n, rg * 1.6, $form_kanten);
   }
   (*s).h += r - 1.0;
+  (*s).form += r - 1.0;
 }
 `,
   h: { form: 'h_form' },

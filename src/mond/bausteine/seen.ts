@@ -25,8 +25,8 @@ fn h_seen(s: ptr<function, Surf>, d: vec3f, lv: i32) {
   (*s).aux2.z = m;
   (*s).aux3.z = 0.0;
   if (m <= 0.0) { return; }
-  let h0 = (*s).h;
-  (*s).h = mix(h0, min(h0, level) - 0.0005 * (1.0 - m), m);
+  let h0 = (*s).h - (*s).form;
+  (*s).h = mix(h0, min(h0, level) - 0.0005 * (1.0 - m), m) + (*s).form;
   (*s).aux3.z = m;
   // Flachwasser in Ufernähe: Rand der Maske
   (*s).aux3.w = (1.0 - sstep(0.0, 0.5, m)) * m;

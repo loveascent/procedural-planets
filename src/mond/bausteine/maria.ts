@@ -20,7 +20,7 @@ fn h_maria(s: ptr<function, Surf>, d: vec3f, lv: i32) {
   let thr = 1.0 - $maria_anteil;
   let zone = sstep(thr - 0.02 - 0.2 * $maria_rand, thr + 0.02 + 0.2 * $maria_rand, (*s).low);
   let hf = $maria_pegel;
-  let h0 = (*s).h;
+  let h0 = (*s).h - (*s).form;
   // „below“: 1 dort, wo das alte Relief unter dem Lavapegel liegt (weicher Rand von 0,0008 Radien = ~1,4 km beim Mond)
   let below = sstep(hf + 0.0004, hf - 0.0004, h0);
   let flooded = zone * below;
@@ -33,7 +33,7 @@ fn h_maria(s: ptr<function, Surf>, d: vec3f, lv: i32) {
     let rr = exp(-sq2(n / 0.07)) * (0.6 + 0.4 * snoise(d * 31.0));
     h += $maria_falten * rr * flooded;
   }
-  (*s).h = h;
+  (*s).h = h + (*s).form;
 }
 fn c_maria(s: ptr<function, Surf>, d: vec3f, g: vec3f) {
   let m = (*s).mare;

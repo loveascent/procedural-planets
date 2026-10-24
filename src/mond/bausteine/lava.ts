@@ -27,7 +27,8 @@ fn h_lava(s: ptr<function, Surf>, d: vec3f, lv: i32) {
   let lake = sstep(1.0 - $lava_see, 1.02 - $lava_see + 0.06, lakeN);
   let plate = (hash13(vec3f(v.z * 7.7, sd, 1.0)) - 0.5);
   let hh = $lava_relief * (plate * 0.8 + 0.3 * (1.0 - crack) - 0.4 * crack);
-  (*s).h = mix((*s).h * 0.5 + hh, $lava_relief * -0.4 + 0.0002 * snoise(d * 30.0), lake);
+  let fm = (*s).form;
+  (*s).h = mix(((*s).h - fm) * 0.5 + hh, $lava_relief * -0.4 + 0.0002 * snoise(d * 30.0), lake) + fm;
   let flick = 0.6 + 0.4 * snoise(d * $lava_frq * 8.0 + 4.0);
   (*s).heat = max(crack * flick, lake * (0.55 + 0.45 * snoise(d * 14.0))) * $lava_hitze;
   (*s).aux2.x = lake;
