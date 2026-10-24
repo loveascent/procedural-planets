@@ -24,7 +24,7 @@ const PAGES: { kind: string; file: string; de: string; en: string; soon?: [strin
 
 /** Welcher Körper diese Seite zeigt (?body=rocky bzw. welt, sonst Gasriese). */
 export function currentBody(): PlanetKind {
-  const b = new URLSearchParams(location.search).get('body');
+  const b = (window as unknown as { __body?: string }).__body ?? new URLSearchParams(location.search).get('body');
   return b === 'rocky' || b === 'welt' || b === 'moon' ? b : 'gas';
 }
 // Eingefrorene Versionen: ['' = aktuell] + Dateien in demo/
