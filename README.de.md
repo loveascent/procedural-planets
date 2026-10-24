@@ -68,7 +68,7 @@ Fassungen laufen direkt im Browser.
 | **v0.7.0** | 29.09.2026 | Eine Seite für alle Körper, eingefrorene Versionen im Kopf wählbar, Relief, Parallaxe-Eigenschatten, Dämmerungssaum, Menüs mit Suche | [aktuelle Seite](https://loveascent.github.io/procedural-planets/index.html) |
 | **v0.8.0** | 06.10.2026 | Alles in schaltbare Bausteine zerlegt; deterministische Bildprüfungen belegen: kein Pixel verändert | (Quelltext) |
 | **v0.9.0** | 06.10.2026 | Sonnensystem: 20 Planeten, Monde und Sonne, N-Körper-Schwerkraft, Kollisionen mit Zerschlagung und Trümmern | (Quelltext) |
-| **v1.1.0** | 24.10.2026 | Mond-Generator (`?body=moon`): Kraterpopulationen, Becken, Maria, Eis, Vulkane, Lava, Atmosphäre, Fontänen als schaltbare Bausteine, 16 Vorlagen | [Mond](https://loveascent.github.io/procedural-planets/index.html?body=moon) |
+| **v1.1.0** | 24.10.2026 | Mond-Generator (`?body=moon`): Kraterpopulationen, Becken, Maria, Eis, Vulkane, Lava, Atmosphäre, Fontänen als schaltbare Bausteine, 17 Vorlagen | [Mond](https://loveascent.github.io/procedural-planets/index.html?body=moon) |
 | **v1.0.0** | 06.10.2026 | Kollisionsmodell nach Leinhardt & Stewart (2012), echte Gasriesen und Gesteinsplaneten laufen live im System, Speichern/Laden, Steckbriefe | [Sonnensystem](https://loveascent.github.io/procedural-planets/index.html?body=welt) |
 
 Dieselben Versionen stehen auch im Menü „aktuell“ im Seitenkopf. Eine Galaxiekarte mit vielen
