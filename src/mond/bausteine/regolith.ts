@@ -7,7 +7,7 @@ export const REGOLITH: Block = {
   id: 'regolith', de: 'Regolith (Grundfarbe)', en: 'Regolith (base colour)', gruppe: 'farbe', an: true,
   note: ['Grundfarbe und Helligkeit der Oberfläche, fleckige Mineralvariation, Raumverwitterung, Hangaufhellung.', 'Base colour and brightness of the surface, patchy mineral variation, space weathering, slope brightening.'],
   par: [
-    P('hell', 'Albedo', 'Albedo', 0.02, 1, 0.005, 0.2, 'Mittlere Rückstrahlung (0 schwarz, 1 weiß). Mond 0,12; Merkur 0,09; Callisto 0,2; Eismonde 0,6–1,0.', 'Mean reflectance (0 black, 1 white). Moon 0.12; Mercury 0.09; Callisto 0.2; icy moons 0.6–1.0.'),
+    P('hell', 'Albedo', 'Albedo', 0.02, 1, 0.005, 0.15, 'Mittlere Rückstrahlung (0 schwarz, 1 weiß). Mond 0,12; Merkur 0,09; Callisto 0,2; Eismonde 0,6–1,0.', 'Mean reflectance (0 black, 1 white). Moon 0.12; Mercury 0.09; Callisto 0.2; icy moons 0.6–1.0.'),
     P('farbton', 'Farbton', 'Hue', 0, 360, 1, 35, 'Grundfarbton in Grad (0 rot, 60 gelb, 120 grün, 200 blau).', 'Base hue in degrees (0 red, 60 yellow, 120 green, 200 blue).', (v) => `${v.toFixed(0)}°`),
     P('saett', 'Sättigung', 'Saturation', 0, 1, 0.005, 0.1, 'Farbintensität. Der Erdmond ist fast grau (0,05–0,15), Io intensiv gelb.', 'Colour intensity. The Moon is almost grey (0.05–0.15), Io intensely yellow.'),
     P('var', 'Flecken', 'Patchiness', 0, 1, 0.01, 0.5, 'Großräumige Helligkeitsvariation (Mineralogie, Verwitterungsgrad).', 'Large-scale brightness variation (mineralogy, degree of weathering).'),
