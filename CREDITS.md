@@ -48,7 +48,7 @@ implementation is original. Thanks to the authors:
 | Max & Becker 1995; Perlin & Neyret 2001; Neyret 2003 | advected textures / flow noise (ROADMAP 1a; two-phase trick used for the clouds in `src/rocky/main.js`) |
 | Showman 2007; Scott & Polvani 2007 | forced shallow-water turbulence: storms as mass pulses, jets and vortices emerge (ROADMAP 1c, see [docs/RESEARCH.md](docs/RESEARCH.md)) |
 
-### Moon generator (`src/mond/`)
+### Moon (`src/rocky/shader/krater.js`)
 | Source | Use |
 |---|---|
 | Pike 1977; Melosh 1989, *Impact Cratering* | simple→complex transition, depth/diameter ratios, rim and ejecta profiles |

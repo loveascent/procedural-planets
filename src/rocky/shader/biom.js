@@ -20,6 +20,15 @@ fn hook_biom_cd(mois: f32, h: f32, slope: f32) -> vec4f { return vec4f(0.5, 0.5,
 export const BIOM_ERDE = /* wgsl */`
 // Klimazonen (erdähnliche Palette, lineare Albedo). Rückgabe: (Albedo, Rauigkeit)
 fn earthBiome(d: vec3f, h: f32, m: f32, slope: f32, nz: f32) -> vec4f {
+  // Mond (Vulkantyp 2): graue Hochländer, dunkle Maria in den Senken des Feuchtefelds, steile Hänge frisch und heller
+  if (U.Vk.z > 1.5) {
+    let mare = smoothstep(0.5, 0.62, m);
+    let hl = vec3f(0.150, 0.145, 0.130);
+    let ma = vec3f(0.062, 0.062, 0.062);
+    var a = mix(hl, ma, mare) * (1.0 + 0.16 * nz);
+    a *= 1.0 + 0.9 * smoothstep(0.08, 0.35, slope);
+    return vec4f(a, 0.92);
+  }
   let sea = U.T.z;
   let lat = abs(d.y);
   let elev = max(h - sea, 0.0);

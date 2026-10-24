@@ -69,7 +69,7 @@ export const SCENE_PLANET = /* wgsl */`
   let Esh = E * cs * ts;
   let up = M * d;
   let day = smoothstep(-0.12, 0.25, muS);
-  let skyAmb = vec3f(0.30, 0.45, 0.75) * U.L2.y * 0.25 * day * U.sun.w * hook_luft_durchlass(U.At.x, max(muS, 0.05));
+  let skyAmb = select(vec3f(0.30, 0.45, 0.75), vec3f(0.30), U.Vk.z > 1.5) * U.L2.y * 0.25 * day * U.sun.w * hook_luft_durchlass(U.At.x, max(muS, 0.05));
 
   var col: vec3f;
   var albOut = vec3f(0.0);
