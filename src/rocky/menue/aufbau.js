@@ -49,8 +49,8 @@ export function createMenu(ext) {
       for (const it of inactive) { addItem(panel, it); panel.disable(it.k, true); }
     }
     if (!ext.kopflos) {   // Kopf, Titel und Fußzeile gehören der Seite des Gesteinsplaneten, nicht der eingebetteten Instanz
-    initShell('rocky');
-    $('t-title').textContent = t('Gesteinsplanet', 'Rocky planet');
+    initShell(S.moon ? 'moon' : 'rocky');
+    $('t-title').textContent = S.moon ? t('Mond', 'Moon') : t('Gesteinsplanet', 'Rocky planet');
     $('version').textContent = __VERSION__;
     $('panel-title').textContent = t('Regler', 'Controls');
     $('t-hint').textContent = coarse ? t('wischen: drehen · zwei Finger: zoomen', 'swipe: turn · pinch: zoom') : t('ziehen: drehen · Rad: zoomen', 'drag: turn · wheel: zoom');

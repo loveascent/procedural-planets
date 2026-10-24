@@ -25,7 +25,11 @@ export function createZustand(Q, coarse) {
     rotate: true, spin: 1.2, spinZoom: 1.0, volcanoes: 0.15, volcanoOn: true, volcanoType: 0, rivers: 3, riverAmount: 1, mesh: 0, craterFill: 1,
     profile: 'full', modWaves: true, modClouds: true, modShadows: true, modAtmo: true, modRim: false, rimStr: 0.35, modBloom: true, modFlare: true, modWaterBody: true, modIce: true, modCavity: true, modSun: true, modMountains: true, tilt: 23, fov: 36,
     view: 0, quality: -1, msaa: MSAA_Q,
+    moon: Q.get('body') === 'moon' ? 1 : 0,
   };
+  // Mond: derselbe Motor wie der Gesteinsplanet, aber ohne Meer, Luft, Wolken und Flüsse; die Vulkanformel ist durch die Kraterformel ersetzt (shader/krater.js)
+  if (S.moon) Object.assign(S, { sea: 0, modClouds: false, modAtmo: false, modWaves: false, modWaterBody: false, modIce: false, modRim: false, rivers: 0, erosion: 0, foam: 0,
+    volcanoOn: true, volcanoType: 2, craterFill: 0, volcanoes: 0.5, cover: 0, spin: 0.15, sunEl: 10 });
   // Wer reduzierte Bewegung eingestellt hat, bekommt einen stehenden Planeten (Drehen lässt sich einschalten)
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) S.rotate = false;
   const DEF = { ...S };
