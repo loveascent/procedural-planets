@@ -59,7 +59,13 @@ export function createSchleife(ext) {
       $('gen-text').textContent = `${t('Erzeuge Planet', 'Generating planet')} ${Math.round(100 * ext.jobDone / Math.max(ext.jobTotal, 1))} %`;
       $('gen-fill').style.width = `${100 * ext.jobDone / Math.max(ext.jobTotal, 1)}%`;
     } else gb.hidden = true;
-    if (!OFFSCREEN) render(enc);          // im Testmodus nur für Fotos zeichnen
+    // Stillstand: ändert sich nichts am Bild, wird nicht neu gezeichnet (Akku, Handy, schwache Grafik). Die Drehung zählt erst ab ~0,05°
+    // (≈ 1 Pixel); Wellen und Wolken laufen nur, wenn sie an sind und etwas zeigen. Karten-Aufträge und Bausteinwechsel zeichnen immer.
+    const bewegtSich = (S.modWaves && ext.seaH > 0.01) || (S.modClouds && S.cover > 0);
+    const sig = [JSON.stringify(S), cam.yaw, cam.pitch, cam.dist, cam.tDist, Math.floor(ext.spin / 8.7e-4), bewegtSich ? Math.floor(ext.simTime * 30) : 0,
+      ext.seaH, RS.nebReady, RS.cloudReady, ext.regenBusy, canvas.width, canvas.height].join('|');
+    const gleich = sig === ext.letzteSig && ext.P.planet === ext.letztePipe && !ext.jobs.length && Math.abs(cam.dist - cam.tDist) < 1e-4;
+    if (!OFFSCREEN && !gleich) { render(enc); ext.letzteSig = sig; ext.letztePipe = ext.P.planet; }          // im Testmodus nur für Fotos zeichnen
     ext.device.queue.submit([enc.finish()]);
     ext.fpsAcc += dt; ext.fpsN++;
     if (now - ext.fpsT > 500) { $('fps').textContent = `${Math.round(ext.fpsN / Math.max(ext.fpsAcc, 1e-3))} fps · ${(1000 * ext.fpsAcc / Math.max(ext.fpsN, 1)).toFixed(2)} ms`; ext.fpsAcc = 0; ext.fpsN = 0; ext.fpsT = now; }
