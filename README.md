@@ -14,6 +14,7 @@ band, coastline and debris cloud comes from equations and numbers.
 [Solar system](https://loveascent.github.io/procedural-planets/index.html?body=welt) ·
 [Gas giant](https://loveascent.github.io/procedural-planets/index.html) ·
 [Rocky planet](https://loveascent.github.io/procedural-planets/index.html?body=rocky) ·
+[Moon generator](https://loveascent.github.io/procedural-planets/index.html?body=moon) ·
 [Cream in coffee](https://loveascent.github.io/procedural-planets/coffee.html) ·
 [every version since v0.1](#versions-from-the-first-prototype-to-the-solar-system)
 
@@ -45,6 +46,10 @@ taken on an RTX 5080 at 1280 × 800, where the status line showed 130–240 fps 
 - **Gas giant:** Jupiter, Saturn, Uranus, Neptune, a hot Jupiter, or a random planet from five
   families. About 50 controls, each explaining what it changes physically and showing its formula.
   Includes undo/redo, save slots, planet codes for sharing, and “colours from image”.
+- **Moon generator:** 24 switchable building blocks (shape, impact craters over 12 size steps, basins with rings and rays, lava maria, rilles,
+  ice fractures, chaos terrain, grooves, cantaloupe terrain, convection plains, volcanoes, lava cracks, dunes, lakes, polar caps, tholins,
+  atmosphere and haze, geyser plumes), each with its own sliders, plus 16 templates from Earth’s Moon to Io, Europa, Titan, Iapetus, Phobos,
+  Triton, Charon and exotic invented worlds. Craters below the map resolution are computed live per pixel, so zooming never blurs.
 - **Rocky planet:** a new world for every seed, with sea level, erosion, mountain belts, rivers and
   lakes, volcanoes, sea ice, clouds and atmosphere. A switchable “original 1:1” mode reproduces
   the method this module started from.
@@ -67,6 +72,7 @@ played directly in the browser.
 | **v0.7.0** | 2026-09-29 | One page for all bodies, frozen versions selectable in the header, relief, parallax self-shadow, twilight rim, searchable menus | [current page](https://loveascent.github.io/procedural-planets/index.html) |
 | **v0.8.0** | 2026-10-06 | Everything split into switchable building blocks; deterministic image tests prove the split changed no pixel | (source) |
 | **v0.9.0** | 2026-10-06 | Solar system: 20 planets, moons and a sun, N-body gravity, collisions with fragmentation and debris | (source) |
+| **v1.1.0** | 2026-10-24 | Moon generator (`?body=moon`): crater populations, basins, maria, ice, volcanoes, lava, atmosphere, plumes as switchable blocks, 16 templates | [moon](https://loveascent.github.io/procedural-planets/index.html?body=moon) |
 | **v1.0.0** | 2026-10-06 | Collision model after Leinhardt & Stewart (2012), real gas giants and rocky planets running live inside the system, save/load, fact sheets | [solar system](https://loveascent.github.io/procedural-planets/index.html?body=welt) |
 
 The same frozen versions can also be picked from the “current” menu in the page header. A galaxy map
@@ -102,6 +108,16 @@ with many solar systems is planned and shown greyed out in the header.
 - **Water and air:** sun glint after Cox & Munk, water absorption after Pope & Fry, atmospheric
   transmittance tables after Bruneton, Rayleigh/Mie/ozone coefficients after Hillaire, clouds with
   domain-warped noise and Henyey-Greenstein forward scattering, GGX highlights, bloom.
+
+### Moons: height, colour and light from stacked blocks (`src/mond/`)
+- **Cube-sphere maps** (same mapping as the rocky planet): a compute shader bakes height + gradient, albedo + gloss and glow/roughness per
+  texel; the gradient comes from finite differences of the full block stack, so every block, also future ones, gets correct lighting for free.
+- **Crater population:** a 3D cell grid per size step (octave), spheres cut the surface in discs of natural size spread; profile = parabola bowl,
+  flat floor + terraces + central peak above a transition radius, ejecta ∝ x⁻³, age-dependent softening, bright rays on young craters.
+  Octaves below the map resolution run per pixel in the draw shader.
+- **Draw shader:** sphere tracing over the height map (silhouettes with craters), soft terrain shadows, horizon occlusion, Lommel–Seeliger
+  regolith with opposition surge, GGX gloss on ice, single-scattering haze with a detached layer, volumetric plumes.
+- **Blocks:** each block is one file in `src/mond/bausteine/` with its sliders, explanations and WGSL; switched-off blocks are not compiled.
 
 ### Solar system: physics on the CPU, looks on the GPU (`src/welt/`)
 - **Gravity:** Newtonian N-body with a symplectic leapfrog integrator (kick-drift-kick) at a fixed

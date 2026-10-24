@@ -2,16 +2,14 @@ import { t } from './i18n';
 
 // Gemeinsame Kopfzeile aller Planeten-Seiten: Planetentyp-Umschalter und Sprache.
 // Jeder Planetentyp ist ein Modul mit eigener Seite; Menü, Stil und Bedienung sind dieselben.
-export type PlanetKind = 'gas' | 'rocky' | 'welt';
+export type PlanetKind = 'gas' | 'rocky' | 'moon' | 'welt';
 
 // Alle Körper laufen in einer Seite (index.html?body=…). Noch nicht gebaute Typen stehen ausgegraut da,
 // mit dem Plan, welche Module sie bekommen.
 const PAGES: { kind: string; file: string; de: string; en: string; soon?: [string, string] }[] = [
   { kind: 'gas', file: 'index.html', de: 'Gasriese', en: 'Gas giant' },
   { kind: 'rocky', file: 'index.html?body=rocky', de: 'Gesteinsplanet', en: 'Rocky planet' },
-  { kind: 'moon', file: '', de: 'Mond', en: 'Moon', soon: [
-    'Kommt später. Module: Gelände + Krater + Seed aus dem Gesteinsplaneten, ohne Meer, Wolken, Flüsse. Kreist um einen Gasriesen (z. B. Jupiters 92 Monde, bei jedem Laden gleich).',
-    'Coming later. Modules: terrain + craters + seed from the rocky planet, no sea, clouds or rivers. Orbits a gas giant (e.g. Jupiter’s 92 moons, identical on every load).'] },
+  { kind: 'moon', file: 'index.html?body=moon', de: 'Mond', en: 'Moon' },
   { kind: 'asteroid', file: '', de: 'Asteroid', en: 'Asteroid', soon: [
     'Kommt später. Module: unregelmäßige Form + Krater + Seed + Gesteinsfarbe. Keine Atmosphäre.',
     'Coming later. Modules: irregular shape + craters + seed + rock colour. No atmosphere.'] },
@@ -27,7 +25,7 @@ const PAGES: { kind: string; file: string; de: string; en: string; soon?: [strin
 /** Welcher Körper diese Seite zeigt (?body=rocky bzw. welt, sonst Gasriese). */
 export function currentBody(): PlanetKind {
   const b = new URLSearchParams(location.search).get('body');
-  return b === 'rocky' || b === 'welt' ? b : 'gas';
+  return b === 'rocky' || b === 'welt' || b === 'moon' ? b : 'gas';
 }
 // Eingefrorene Versionen: ['' = aktuell] + Dateien in demo/
 const VERSIONS: [string, string, string][] = [
