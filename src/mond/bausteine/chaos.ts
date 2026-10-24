@@ -31,7 +31,8 @@ fn h_chaos(s: ptr<function, Surf>, d: vec3f, lv: i32) {
   let raft = $chaos_hoehe * (rnd * 2.0 + tilt) * 0.5;
   let matrixH = -$chaos_hoehe * 0.55 + $chaos_hoehe * 0.14 * snoise(d * $chaos_frq * 4.0);
   let hh = mix(matrixH, raft, inner);
-  (*s).h = mix((*s).h, (*s).h * 0.35 + hh, zone);
+  let fm = (*s).form;
+  (*s).h = mix((*s).h, ((*s).h - fm) * 0.35 + hh + fm, zone);
   (*s).aux.z = zone * (1.0 - inner);
 }
 fn c_chaos(s: ptr<function, Surf>, d: vec3f, g: vec3f) {

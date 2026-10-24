@@ -37,6 +37,7 @@ fn kraterKap() -> i32 {
 }
 fn craters(s: ptr<function, Surf>, d: vec3f, k0: i32, k1: i32, lv: i32) {
   let sd = gseed();
+  let fm = (*s).form;
   var h = (*s).h;
   var fresh = (*s).fresh;
   var ray = (*s).ray;
@@ -95,7 +96,7 @@ fn craters(s: ptr<function, Surf>, d: vec3f, k0: i32, k1: i32, lv: i32) {
         }
       }
     }
-    h = h * (1.0 - $krater_loeschen * cv) + hs;
+    h = (h - fm) * (1.0 - $krater_loeschen * cv) + fm + hs;
     fresh = max(fresh * (1.0 - cv), fr);
     ray = max(ray * (1.0 - cv), ry);
     cavAll = max(cavAll, cv);

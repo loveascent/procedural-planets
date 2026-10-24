@@ -9,6 +9,7 @@ export const GRUND = COMMON + NOISE + /* wgsl */`
 // h = Radiusabweichung in Radien (r = 1 + h). Die Bausteine füllen ihn in der Höhenstufe, dann in der Farbstufe.
 struct Surf {
   h: f32,
+  form: f32,        // Anteil von h aus der Grundform (Ellipsoid, Beulen); Krater löschen ihn nicht
   col: vec3f,       // Albedo (linear)
   gloss: f32,       // 0 staubiger Regolith … 1 Eis/Flüssigkeit (Glanz)
   heat: f32,        // Glühen (Lava), Einheiten: Strahlungsdichte relativ zur beleuchteten Fläche
@@ -26,7 +27,7 @@ struct Surf {
 }
 fn surfInit() -> Surf {
   var s: Surf;
-  s.h = 0.0; s.col = vec3f(0.2); s.gloss = 0.0; s.heat = 0.0; s.rough = 0.7; s.fresh = 0.0; s.mare = 0.0; s.ice = 0.0;
+  s.h = 0.0; s.form = 0.0; s.col = vec3f(0.2); s.gloss = 0.0; s.heat = 0.0; s.rough = 0.7; s.fresh = 0.0; s.mare = 0.0; s.ice = 0.0;
   s.low = 0.5; s.cav = 0.0; s.tint = vec3f(0.0); s.ray = 0.0; s.aux = vec4f(0.0); s.aux2 = vec4f(0.0); s.aux3 = vec4f(0.0);
   return s;
 }

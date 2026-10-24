@@ -36,7 +36,7 @@ fn h_konvektion(s: ptr<function, Surf>, d: vec3f, lv: i32) {
   let dome = 0.25 * (1.0 - sstep(0.0, 0.6, v.x));
   let floorH = -$konvektion_tiefe;
   let hb = floorH - $konvektion_rinnen * (trough - dome);
-  (*s).h = mix((*s).h, hb + 0.05 * ((*s).h - floorH) * 0.0, m);
+  (*s).h = mix((*s).h, hb + (*s).form, m);
   (*s).cav = max((*s).cav * (1.0 - m), 0.0);
   (*s).fresh *= (1.0 - m);
 }
