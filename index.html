@@ -12,8 +12,7 @@
 <body>
 <div id="app">
   <div id="stage">
-    <canvas id="view" data-body="gas,rocky" aria-label="Planet view: drag to turn, scroll or pinch to zoom"></canvas>
-    <canvas id="mond" data-body="moon" aria-label="Moon view: drag to turn, scroll or pinch to zoom"></canvas>
+    <canvas id="view" data-body="gas,rocky,moon" aria-label="Planet view: drag to turn, scroll or pinch to zoom"></canvas>
     <canvas id="welt" data-body="welt" aria-label="Solar system: drag to turn, scroll or pinch to zoom, click selects, double-click flies there"></canvas>
     <div class="hud">
       <h1 id="t-title">Procedural Planets</h1>
@@ -23,7 +22,7 @@
       <div class="meta" id="hint" data-body="gas">drag to rotate, scroll or pinch to zoom</div>
       <div class="meta" data-body="rocky,moon"><span id="mode-tag"></span> · <span id="t-hint"></span></div>
     </div>
-    <div id="genbar" data-body="rocky" hidden><span id="gen-text"></span><div class="track"><div class="fill" id="gen-fill"></div></div></div>
+    <div id="genbar" data-body="rocky,moon" hidden><span id="gen-text"></span><div class="track"><div class="fill" id="gen-fill"></div></div></div>
     <div id="loading" data-body="gas" role="status" aria-live="polite">
       <div class="load-box">
         <p id="load-title">Spinning up the atmosphere</p>
