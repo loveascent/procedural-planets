@@ -30,8 +30,6 @@ const DBG: i32 = ${DBG};
 fn gseed() -> f32 { return RUF.a.x; }
 fn gtexn() -> f32 { return RUF.upW.w; }
 ` + lib + /* wgsl */`
-struct Det { g: vec3f, br: f32 }
-fn detSum(a: Det, b: Det) -> Det { return Det(a.g + b.g, a.br * b.br); }
 struct VO { @builtin(position) pos: vec4f, @location(0) uv: vec2f }
 @vertex fn vs(@builtin(vertex_index) i: u32) -> VO {
   let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u));

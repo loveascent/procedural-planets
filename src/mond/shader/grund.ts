@@ -109,6 +109,9 @@ fn sphPoint(h: vec3f) -> vec3f {
 // Winkelabstand zweier Einheitsrichtungen (stabil auch für sehr kleine Winkel)
 fn angDist(a: vec3f, b: vec3f) -> f32 { return 2.0 * asin(clamp(0.5 * length(a - b), 0.0, 1.0)); }
 
+// Zusatz aus dem Zeichen-Shader: Neigung und Helligkeitsfaktor des Live-Details
+struct Det { g: vec3f, br: f32 }
+fn detSum(a: Det, b: Det) -> Det { return Det(a.g + b.g, a.br * b.br); }
 // Henyey-Greenstein-Phasenfunktion (Asymmetrie g), normiert auf 1 über die Kugel
 fn hg(c: f32, g: f32) -> f32 { let g2 = g * g; return (1.0 - g2) / (12.566371 * pow(1.0 + g2 - 2.0 * g * c, 1.5)); }
 // 1 = Punkt p wird von der Sonne beschienen, 0 = im Schatten des Körpers (weicher Rand von ~1 % Radius)

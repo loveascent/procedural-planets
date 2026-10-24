@@ -19,8 +19,8 @@ fn duneMask(d: vec3f) -> f32 {
   let lat = asin(clamp(d.y, -1.0, 1.0));
   let edge = $duenen_breite * (1.0 + 0.45 * snoise(d * 2.3 + vec3f(gseed() * 0.3, 1.0, 2.0)));
   let band = 1.0 - sstep(edge * 0.55, edge, abs(lat));
-  let patch = sstep(0.5 - 0.7 * $duenen_deckung, 0.55 - 0.7 * $duenen_deckung + 0.25, snoise(d * 3.0 + vec3f(4.0, gseed() * 0.17, 1.0)));
-  return band * patch;
+  let flecken = sstep(0.5 - 0.7 * $duenen_deckung, 0.55 - 0.7 * $duenen_deckung + 0.25, snoise(d * 3.0 + vec3f(4.0, gseed() * 0.17, 1.0)));
+  return band * flecken;
 }
 fn h_duenen(s: ptr<function, Surf>, d: vec3f, lv: i32) {
   let m = duneMask(d);
