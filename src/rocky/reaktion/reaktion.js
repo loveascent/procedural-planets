@@ -35,7 +35,7 @@ export function createReaktion(ext) {
   function newSeed(sd) {
     S.seed = String(sd).trim() || randomSeed();
     ext.PP = planetParams(S.seed);
-    S.sea = ext.PP.water;
+    if (!S.moon) S.sea = ext.PP.water;   // der Mond bleibt trocken (Meer lässt sich per Regler einschalten)
     S.cover = ext.PP.cloudCover;
     if (!ext.kopflos) try { const u = new URL(location.href); u.searchParams.set('seed', S.seed); history.replaceState(null, '', u); } catch {}
     buildUI();
