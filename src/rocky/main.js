@@ -99,7 +99,7 @@ const kopflos = opts.kopflos || null;
 // ============================================================================================
 
 const Q = kopflos
-  ? new URLSearchParams({ offscreen: '1', seed: String(kopflos.seed), nebula: '0', stars: '0', flare: '0', res: String(kopflos.aufloesung || 1024), cres: '1024', nres: '64' })
+  ? new URLSearchParams({ offscreen: '1', seed: String(kopflos.seed), nebula: '0', stars: '0', flare: '0', res: String(kopflos.aufloesung || 1024), cres: '1024', nres: '64', ...(kopflos.mond ? { body: 'moon' } : {}) })
   : new URLSearchParams(location.search);
 const coarse = matchMedia('(max-width: 760px), (pointer: coarse)').matches;
 

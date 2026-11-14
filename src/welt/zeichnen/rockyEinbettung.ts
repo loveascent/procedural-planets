@@ -19,7 +19,7 @@ interface RockyInstanz {
   zeichne(a: { auge: V3; vp: Mat4; sonne: V3; drehung: number; helligkeit: number }, dt: number): GPUTexture;
 }
 
-export function erstelleRockyEinbettung(dev: GPUDevice, editor: HTMLElement) {
+export function erstelleRockyEinbettung(dev: GPUDevice, editor: HTMLElement, art: 'gestein' | 'mond' = 'gestein') {
   let inst: RockyInstanz | null = null;
   let laedt = false;
   let aktiv: number | null = null;
@@ -48,7 +48,7 @@ export function erstelleRockyEinbettung(dev: GPUDevice, editor: HTMLElement) {
   function waehle(k: EinbettungsKontext): Koerper | null {
     let best: Koerper | null = null, bpx = 0;
     for (const g of k.koerper) {
-      if (g.art !== 'gestein') continue;
+      if (g.art !== art) continue;
       const d = Math.hypot(g.p[0] - k.auge[0], g.p[1] - k.auge[1], g.p[2] - k.auge[2]);
       const px = (g.r / Math.max(d, 1e-6)) * k.pixelProRadiant;
       if (px > (g.id === aktiv ? k.anPx * 0.4 : k.anPx) && px > bpx) { best = g; bpx = px; }
@@ -75,6 +75,8 @@ export function erstelleRockyEinbettung(dev: GPUDevice, editor: HTMLElement) {
       typ = { ...typRec }; inhalt = null; aktiv = null; menueAb();
     },
     holeTyp(): Record<string, boolean> { return { ...typ }; },
+    /** Seed des Körpers wurde von außen geändert: gemerkte Einstellungen verwerfen, beim nächsten Bild mit dem neuen Seed aufsetzen */
+    vergiss(id: number) { koerperS.delete(id); if (inhalt === id) { inhalt = null; aktiv = null; deck = 0; menueAb(); } },
     /** Steckbrief des gerade echt berechneten Körpers (sonst leer) */
     fakten(id: number): [string, string][] { return inst && inhalt === id && inst.bereit ? inst.fakten() : []; },
     /** für Prüfwerkzeuge */
@@ -86,7 +88,7 @@ export function erstelleRockyEinbettung(dev: GPUDevice, editor: HTMLElement) {
         status = 'lädt';
         if (!laedt) {
           laedt = true;
-          import('../../rocky/main.js' as string).then((m) => m.run({ kopflos: { device: dev, breite: k.breite, hoehe: k.hoehe, seed: ziel.seed, aufloesung } }))
+          import('../../rocky/main.js' as string).then((m) => m.run({ kopflos: { device: dev, breite: k.breite, hoehe: k.hoehe, seed: ziel.seed, aufloesung, mond: art === 'mond' } }))
             .then((i: RockyInstanz) => { inst = i; aktiv = null; });
         }
         return null;
@@ -119,7 +121,7 @@ export function erstelleRockyEinbettung(dev: GPUDevice, editor: HTMLElement) {
         editor.innerHTML = '';
         const kopf = document.createElement('div');
         kopf.className = 'editor-kopf';
-        kopf.innerHTML = `Gesteinsplanet · ${ziel.name}<small>Alle Regler und Bausteine dieses Planeten (live). Die Schalter der Welt stehen oben.</small>`;
+        kopf.innerHTML = `${art === 'mond' ? 'Mond' : 'Gesteinsplanet'} · ${ziel.name}<small>Alle Regler und Bausteine dieses Planeten (live). Die Schalter der Welt stehen oben.</small>`;
         const wurzel = document.createElement('div');
         editor.append(kopf, wurzel);
         inst.menue(wurzel);
