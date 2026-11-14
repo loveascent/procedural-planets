@@ -16,6 +16,8 @@ export interface Steuerung {
   fliegeHin(id: number): void; gesamtansicht(): void;
   welt(): Welt;
   seed(): number; neuesSystem(seed: number): void;
+  /** Seed eines einzelnen Körpers (Planet oder Mond) ändern: Oberfläche und echte Simulation setzen mit dem neuen Seed neu auf */
+  setzeSeed(id: number, seed: number): void;
   asteroid(zielId: number | null, tempo: number, radius: number, art: Art): number | null;
   planetGegenNachbar(tempo: number): boolean;
   info(): { gas?: string; fels?: string; fps: number; teilschritte: number; voll: string[]; punkte: number; backen: number; koerper: number; truemmer: number; zeit: number; verworfen: number; ereignisse: number };
@@ -56,7 +58,18 @@ export function baueOberflaeche(s: Steuerung, E: Settings, standard: Settings, w
   kn('Gesamtansicht', () => s.gesamtansicht(), 'Taste Esc');
   kn('Im Editor öffnen', () => { const id = s.auswahl(); const u = id === null ? null : s.editorUrl(id); if (u) window.open(u, '_blank'); }, 'Öffnet die Seite des Gasriesen bzw. Gesteinsplaneten (der alte Editor) in einem neuen Tab, mit dem Seed und den Einstellungen dieses Planeten.');
   const infoKasten = el('div', { class: 'welt-info' });
-  ansicht.append(auswahlFeld, z, infoKasten);
+  // Seed des gewählten Körpers (Edit je Planet/Mond); Feld liegt außerhalb des Steckbriefs, damit es beim Aktualisieren nicht verloren geht
+  const kSeedZeile = el('div', { class: 'seedrow' });
+  const kSeedFeld = el<HTMLInputElement>('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Seed des gewählten Körpers' });
+  const kSeedNeu = el('button', { type: 'button' }, 'setzen');
+  const kSeedWuerfel = el('button', { type: 'button' }, 'Zufall');
+  const setzeKSeed = (n: number) => { const id = s.auswahl(); if (id !== null && Number.isFinite(n)) { s.setzeSeed(id, n); kSeedFeld.value = String(Math.max(1, Math.floor(n)) % 2147483647); } };
+  kSeedNeu.addEventListener('click', () => setzeKSeed(parseInt(kSeedFeld.value, 10)));
+  kSeedFeld.addEventListener('keydown', (e) => { if (e.key === 'Enter') setzeKSeed(parseInt(kSeedFeld.value, 10)); });
+  kSeedWuerfel.addEventListener('click', () => setzeKSeed(1 + Math.floor(Math.random() * 2 ** 30)));
+  kSeedZeile.append(el('label', {}, 'Körper-Seed'), kSeedFeld, kSeedNeu, kSeedWuerfel);
+  let kSeedFuer: number | null = null;
+  ansicht.append(auswahlFeld, z, kSeedZeile, infoKasten);
   p.section('Ansicht', 'Klick auf einen Körper wählt ihn, Doppelklick fliegt hin. Ziehen dreht, Mausrad zoomt.').custom(ansicht)
     .toggle('nurAuswahl', 'Nur Auswahl zeigen', 'Blendet alle anderen Körper aus: es bleiben Sonne, der gewählte Körper und seine Monde bzw. sein Planet. Praktisch zum Feinabstimmen eines einzelnen Planeten.');
 
@@ -146,6 +159,8 @@ export function baueOberflaeche(s: Steuerung, E: Settings, standard: Settings, w
     auswahlFeld.value = String(a ?? 0);
     const k = a === null ? undefined : K.find((x) => x.id === a);
     // Steckbrief als Tabelle (Werte der Weltphysik; läuft der Körper echt, kommen die Werte seiner Simulation dazu)
+    kSeedZeile.style.display = k && k.art !== 'sonne' ? '' : 'none';
+    if (k && (kSeedFuer !== k.id || document.activeElement !== kSeedFeld)) { if (document.activeElement !== kSeedFeld) kSeedFeld.value = String(k.seed); kSeedFuer = k.id; }
     infoKasten.textContent = '';
     if (!k) infoKasten.textContent = 'Noch kein Körper gewählt.';
     else {
