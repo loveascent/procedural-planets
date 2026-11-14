@@ -42,7 +42,7 @@ const QUALITAET: Record<string, { aufl: number; anPx: number; gas: string; fels:
 export async function startWelt() {
   // Behälter im gemeinsamen Bedienfeld: Menü der Welt, dann (nur beim nahen Planeten) sein vollständiges Menü
   const koerperMenue = document.getElementById('panel-body') as HTMLElement;
-  for (const id of ['welt-menue', 'editor-gas', 'editor-fels']) if (!document.getElementById(id)) { const d = document.createElement('div'); d.id = id; koerperMenue.append(d); }
+  for (const id of ['welt-menue', 'editor-gas', 'editor-fels', 'editor-mond']) if (!document.getElementById(id)) { const d = document.createElement('div'); d.id = id; koerperMenue.append(d); }
   const canvas = document.getElementById('welt') as HTMLCanvasElement;
   const g = await starteGeraet(canvas);
   const { dev } = g;
@@ -64,6 +64,7 @@ export async function startWelt() {
   const himmel = erstelleHimmelZeichner(dev, g.format, uni);
   const gasE = erstelleGasEinbettung(dev, document.getElementById('editor-gas') as HTMLElement);
   const felsE = erstelleRockyEinbettung(dev, document.getElementById('editor-fels') as HTMLElement);
+  const mondE = erstelleRockyEinbettung(dev, document.getElementById('editor-mond') as HTMLElement, 'mond');   // Monde: Motor des Gesteinsplaneten im Mond-Modus (?body=moon), je Mond eigener Seed
   const einblend = erstelleEinblendung(dev, g.format);
   const spuren = new Spuren();
   const blitze = new Blitze();
@@ -134,8 +135,8 @@ export async function startWelt() {
     tempo = Math.pow(10, Number(E.tempoLog)); pause = !!E.pause;
     baueShader();
     const st = QUALITAET[String(E.qualitaet)] ?? QUALITAET.mittel;
-    gasE.setzeQualitaet(st.gas); felsE.setzeQualitaet(st.fels);
-    gasE.setzeEinstellungen(s.gas ?? {}, s.gasTyp ?? {}); felsE.setzeEinstellungen(s.fels ?? {}, s.felsTyp ?? {});
+    gasE.setzeQualitaet(st.gas); felsE.setzeQualitaet(st.fels); mondE.setzeQualitaet(st.fels);
+    gasE.setzeEinstellungen(s.gas ?? {}, s.gasTyp ?? {}); felsE.setzeEinstellungen(s.fels ?? {}, s.felsTyp ?? {}); mondE.setzeEinstellungen({}, {});
     spuren.leeren(); blitze.zuruecksetzen(); zeitRestZuruecksetzen(); tex.leeren();
     auswahl = null;
     setzeFokus(s.kamera?.fokus ?? null);
@@ -154,12 +155,12 @@ export async function startWelt() {
   /** Adresse der Seite des Planeten-Editors mit diesem Planeten (Seed, Vorlage, Einstellungen). */
   function editorUrl(id: number): string | null {
     const k = finde(w, id);
-    if (!k || (k.art !== 'gas' && k.art !== 'gestein')) return null;
+    if (!k || (k.art !== 'gas' && k.art !== 'gestein' && k.art !== 'mond')) return null;
     if (k.art === 'gas') {
       const code = gasE.planetenCode(id);
       return code ? `index.html?body=gas&code=${encodeURIComponent(code)}` : `index.html?body=gas`;
     }
-    const q = new URLSearchParams({ body: 'rocky', seed: String(k.seed) });
+    const q = new URLSearchParams({ body: k.art === 'mond' ? 'moon' : 'rocky', seed: String(k.seed) });
     for (const [key, v] of Object.entries(felsE.holeEinstellungen()[id] ?? {})) if (typeof v === 'number') q.set(key, String(v));
     return `index.html?${q.toString()}`;
   }
@@ -182,7 +183,7 @@ export async function startWelt() {
       z.push(['Bahn um', eltern.name], ['Abstand', f3(abstand)], ['Bahngeschwindigkeit', `${f3(v)} /s`]);
       if (el) z.push(['Umlaufzeit', Number.isFinite(el.periode) ? `${el.periode.toFixed(0)} s` : 'ungebunden'], ['Exzentrizität', el.e.toFixed(3)]);
     }
-    const live = [...gasE.fakten(id), ...felsE.fakten(id)];
+    const live = [...gasE.fakten(id), ...felsE.fakten(id), ...mondE.fakten(id)];
     if (live.length) { z.push(['— echte Simulation —', '']); z.push(...live); }
     return z;
   }
@@ -195,6 +196,7 @@ export async function startWelt() {
     gesamtansicht: () => setzeFokus(null),
     welt: () => w,
     seed: () => seed, neuesSystem,
+    setzeSeed: (id, n) => { const k = finde(w, id); if (!k || k.art === 'sonne') return; k.seed = Math.max(1, Math.floor(n)) % 2147483647; tex.neuBacken(k); gasE.vergiss(id); felsE.vergiss(id); mondE.vergiss(id); },
     asteroid: (zielId, tempoAuf, radius, art) => {
       const z = zielId ?? auswahl; if (z === null) return null;
       const k = werfeAuf(w, z, { radius, tempo: tempoAuf, art });
@@ -213,7 +215,7 @@ export async function startWelt() {
     if (key === 'qualitaet') {
       const st = QUALITAET[String(E.qualitaet)] ?? QUALITAET.mittel;
       E.aufl = st.aufl; E.anPx = st.anPx;
-      gasE.setzeQualitaet(st.gas); felsE.setzeQualitaet(st.fels);
+      gasE.setzeQualitaet(st.gas); felsE.setzeQualitaet(st.fels); mondE.setzeQualitaet(st.fels);
       panel.refresh();
     } else if (key === 'tempoLog') tempo = Math.pow(10, Number(E.tempoLog));
     else if (key === 'pause') pause = !!E.pause;
@@ -335,6 +337,7 @@ export async function startWelt() {
     info.gas = gasE.status;
     const einFels = felsE.aktualisiere(kontext, schalter.felsLive);
     info.fels = felsE.status;
+    const einMond = mondE.aktualisiere(kontext, schalter.felsLive);
 
     // Stufen und Kugel-Instanzen
     const lod = waehleStufen(sicht, auge, pixelProRadiant, schalter.lod);
@@ -344,7 +347,7 @@ export async function startWelt() {
     for (const k of sicht) {
       const stufe = lod.stufen.get(k.id)!;
       const r = rel(k.p);
-      if (k.id === gasE.ausgeblendet || k.id === felsE.ausgeblendet) continue;   // die echte Instanz deckt ihn vollständig
+      if (k.id === gasE.ausgeblendet || k.id === felsE.ausgeblendet || k.id === mondE.ausgeblendet) continue;   // die echte Instanz deckt ihn vollständig
       if (stufe === 'punkt') {
         if (nl < MAX_LEUCHT - 8) { leucht.set([r[0], r[1], r[2], k.r, ...farbePunkt(k), 0.9, 2, 0, 0, 0], nl * LEUCHT_FLOATS); nl++; punkte++; }
         continue;
@@ -403,6 +406,7 @@ export async function startWelt() {
     planeten.zeichne(pass);
     if (ein) einblend.zeichne(pass, ein.tex, vp, ein.mitte, ein.radius, ein.deck, W, H);
     if (einFels) einblend.zeichne(pass, einFels.tex, vp, einFels.mitte, einFels.radius, einFels.deck, W, H, 1);
+    if (einMond) einblend.zeichne(pass, einMond.tex, vp, einMond.mitte, einMond.radius, einMond.deck, W, H, 1);
     if (schalter.spuren) linien.zeichne(pass);
     leuchten.zeichne(pass);
     pass.end();
@@ -414,5 +418,5 @@ export async function startWelt() {
   requestAnimationFrame(bild);
 
   // Prüf- und Einstiegspunkt für Werkzeuge (Bildvergleich, Selbsttest)
-  (window as unknown as { welt: unknown }).welt = { ste, kam, get w() { return w; }, schalter, E, wirkt, setzeSchalter, setzeFokus, tex, info, panel, gasE, felsE, speichern };
+  (window as unknown as { welt: unknown }).welt = { ste, kam, get w() { return w; }, schalter, E, wirkt, setzeSchalter, setzeFokus, tex, info, panel, gasE, felsE, mondE, speichern };
 }

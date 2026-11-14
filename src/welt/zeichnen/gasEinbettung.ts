@@ -102,6 +102,8 @@ export function erstelleGasEinbettung(dev: GPUDevice, editor: HTMLElement) {
       const s = inhalt === id && inst.bereit ? inst.app.snapshot() : koerperS.get(id);
       return s ? inst.planetenCode(s) : null;
     },
+    /** Seed des Körpers wurde von außen geändert: gemerkte Einstellungen verwerfen, beim nächsten Bild mit dem neuen Seed aufsetzen */
+    vergiss(id: number) { koerperS.delete(id); if (inhalt === id) { inhalt = null; aktiv = null; deck = 0; menueAb(); } },
     /** Steckbrief des gerade echt berechneten Körpers (sonst leer) */
     fakten(id: number): [string, string][] { return inst && inhalt === id && inst.bereit ? inst.fakten() : []; },
     /** für Prüfwerkzeuge */
