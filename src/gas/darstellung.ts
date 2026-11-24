@@ -37,7 +37,7 @@ export function writeRender(app: App) {
     app.S.pomOn ? 1 : 0, app.S.pomHeight, app.S.pomShadow, app.S.reliefSize,
     ({ v04: 0, off: 1, soft: 2 } as Record<string, number>)[app.S.twilight] ?? 0, ({ v04: 0, soft: 1, off: 2 } as Record<string, number>)[app.S.rimGlow] ?? 0, 0, 0,
     app.S.arghOn ? 1 : 0, app.S.arghMix, app.S.arghDensity, app.S.arghAniso,
-    app.S.arghSoft, app.S.arghShadow, 0, 0,
+    app.S.arghSoft > 0 ? Math.max(2, Math.round(app.S.arghSoft * app.arghQ)) : 0, Math.max(4, Math.round(app.S.arghShadow * app.arghQ)), app.S.arghSmooth, app.S.arghEdge / Math.max(app.S.arghDensity, 1),
   ], 16);
   app.device.queue.writeBuffer(app.renderBuf, 0, d);
 }

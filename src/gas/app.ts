@@ -75,6 +75,7 @@ export class App {
   wc = 0;
   ref: CubeField | null = null;
   refNeu = false;
+  arghQ = 1;      // automatischer Qualitätsfaktor des Volumens (1 = voll), sinkt bei zu wenig fps
   refMarke = 0;   // zählt Aufträge „Referenz aus Partikeln“, damit ein veralteter nichts mehr überschreibt
   warpNeu = false;
   foto: GPUTexture | null = null;
@@ -121,7 +122,7 @@ export class App {
       this.ctx.configure({ device, format: this.format, alphaMode: 'opaque' });
     }
     // clamp-to-edge: im Flächeninneren wird nie über den Rand hinaus gefiltert (das übernimmt sampleCube).
-    this.sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
+    this.sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
     this.simBuf = device.createBuffer({ size: SIM_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.renderBuf = device.createBuffer({ size: RENDER_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 

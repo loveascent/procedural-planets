@@ -13,6 +13,27 @@ fn initWarp(@builtin(global_invocation_id) id: vec3u) {
   textureStore(dst, id.xy, id.z, vec4f(0.0, 0.0, 0.0, 1.0));   // gespeichert wird die Abweichung d = M(x) − x (Identität = 0): klein, daher in 16 Bit genau genug
 }
 
+// Referenz ohne Foto, sofort: die Anfangsfarbe des Planeten (Bänder, Stürme) mit Wolkendetail. Das Detail ist fbm-Gradientenrauschen (Quilez, mit Domain-Warp) in
+// Breitenrichtung gestreckt (Wolken in Bändern); es steckt in der festen Karte und wird damit vom Wind mitverwirbelt. Eigene Wahl für den Alien-Fall ohne Foto,
+// hier gesehen statt belegt; Wavelet Turbulence (Kim et al. 2008) ist die Vorlage für „Detail auf grober Strömung“.
+fn fbmD(x: vec3f) -> f32 {
+  var s = 0.0; var a = 0.5; var q = x;
+  for (var i = 0; i < 9; i++) { s += a * noised(q).x; q = q * 2.03 + vec3f(1.7, 9.2, 3.1); a *= 0.66; }
+  return s;
+}
+@compute @workgroup_size(8, 8, 1)
+fn initRef(@builtin(global_invocation_id) id: vec3u) {
+  if (f32(id.x) >= S.dyeN || f32(id.y) >= S.dyeN) { return; }
+  let p = texDir(id, S.dyeN);
+  let sm = stormMask(p, 0.55);
+  var c = mix(bandTarget(p), sm.rgb, sm.w);
+  let q = vec3f(p.x, p.y * 2.5, p.z) * 5.0 + vec3f(S.seed, 0.0, 0.0);
+  let w = vec3f(noised(q * 0.7).x, noised(q * 0.7 + vec3f(5.2, 1.3, 8.1)).x, noised(q * 0.7 + vec3f(2.7, 6.4, 3.3)).x);
+  let n = fbmD(q + 2.0 * w);
+  c *= clamp(1.0 + 1.3 * n, 0.1, 2.2);
+  textureStore(dst, id.xy, id.z, vec4f(c, 1.0));
+}
+
 // M(x, t+dt) = M(x − u·dt, t): die Abbildung (als Abweichung vom Ort gespeichert, sonst quantisiert 16 Bit die Abtastrichtung sichtbar) ist ein mitgeführter Skalar, genau wie der Farbstoff (Stam 1999).
 @compute @workgroup_size(8, 8, 1)
 fn advectWarp(@builtin(global_invocation_id) id: vec3u) {
@@ -27,6 +48,20 @@ fn advectWarp(@builtin(global_invocation_id) id: vec3u) {
   w = normalize(w);
   w = normalize(mix(w, p, 1.0 - exp(-S.mode.z * dt)));                      // Rückstellung zur Identität
   textureStore(dst, id.xy, id.z, vec4f(w - p, 1.0));
+}
+`;
+
+// Mip-Stufe l aus Stufe l−1 (Mittel aus 2×2 Texeln): die Höhe des Volumens wird geglättet abgetastet, das entfernt die Facetten der Bilinear-Abtastung bei starker Vergrößerung
+export const MIPS_WGSL = /* wgsl */`
+@group(0) @binding(0) var src: texture_2d_array<f32>;
+@group(0) @binding(1) var dst: texture_storage_2d_array<rgba16float, write>;
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3u) {
+  let n = textureDimensions(dst).xy;
+  if (id.x >= n.x || id.y >= n.y) { return; }
+  let b = vec2i(id.xy) * 2;
+  let c = textureLoad(src, b, id.z, 0) + textureLoad(src, b + vec2i(1, 0), id.z, 0) + textureLoad(src, b + vec2i(0, 1), id.z, 0) + textureLoad(src, b + vec2i(1, 1), id.z, 0);
+  textureStore(dst, id.xy, id.z, c * 0.25);
 }
 `;
 

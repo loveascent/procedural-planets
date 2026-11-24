@@ -24,7 +24,7 @@ export function onChange(app: App, key: Key) {
     case 'velRes': case 'curlRes': app.allocVel(); break;
     case 'dyeRes': app.allocDye(); break;
     case 'particles': app.allocParticles(); break;
-    case 'arghOn': case 'arghSource': case 'arghRefRes': case 'arghRefQuelle': app.allocKarte(); app.needsDye = app.needsDye || (app.S.arghOn && app.S.arghSource === 'karte'); app.updateVisibility(); break;
+    case 'arghOn': case 'arghSource': case 'arghRefRes': case 'arghRefQuelle': if (key === 'arghRefQuelle') app.refNeu = true; app.allocKarte(); app.fuelleKarte(); app.updateVisibility(); break;   // kein Neu-Einschwingen: die Karte ist sofort da
     case 'flow': case 'look': if (key === 'look') { const o = Object.values(EDDY_BY_LOOK); if (o.includes(app.S.eddyStrength)) app.S.eddyStrength = EDDY_BY_LOOK[app.S.look] ?? app.S.eddyStrength; if (Object.values(RELIEF_BY_LOOK).includes(app.S.relief)) app.S.relief = RELIEF_BY_LOOK[app.S.look] ?? app.S.relief; app.panel.refresh(); } app.updateVisibility(); app.needsDye = true; if (key === 'look' && QUALITY[app.S.quality]?.fluid) { app.applyQuality(true); app.panel.refresh(); } break;
     case 'retro': app.usePreset(app.preset); app.needsInit = true; break;
     case 'seamless': app.buildPipes(app.S.seamless); break;

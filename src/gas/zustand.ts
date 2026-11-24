@@ -86,10 +86,12 @@ export const S = {
   arghMix: 0.12,          // Mix-Faktor f (Video: 0,054; mit scharfer Karte gemessen: 0,12 zeigt deutlich Relief ohne Klumpen, 0,2 für Fotos)
   arghDensity: 30,        // Dichte σ je Planetenradius (Video-Referenz des Auftraggebers: 0,3 je Blender-Einheit bei Würfelkante 100 → 30)
   arghAniso: 0,           // Anisotropie g (Principled Volume, Video: 0)
-  arghSoft: 12,           // Streupunkte der weichen Haut (0 = harte Haut, ein Streupunkt); gemessen: 12 ≈ 76 fps im Nahbild (Planet füllt das Bild, Pixeldichte 2), 16 ≈ 68 fps
-  arghShadow: 16,         // Schritte des Schattenstrahls zur Sonne
+  arghEdge: 0.3,            // Randweichheit in freien Weglängen (Breite der Dichterampe an der Hautkante); 0 = harte Stufe wie ColorRamp „Constant“
+  arghSmooth: 0.25,          // Glättung der Höhe (Mip-Stufe), entfernt Facetten bei Vergrößerung
+  arghSoft: isPhone ? 3 : 10, // Streupunkte der weichen Haut (0 = harte Haut); Handy 3 (5080: 1,8 ms statt 4,6 ms im vollen Bild)
+  arghShadow: isPhone ? 4 : 8, // Schritte des Schattenstrahls zur Sonne
   arghSource: 'karte',    // Farbquelle des Volumens: 'karte' = Referenzkarte über Wind-Rückabbildung (Ansatz A, gemessen besser), 'dye' = live Farbstoff (Ansatz B)
-  arghRefQuelle: 'partikel', // Ansatz A ohne Foto: 'partikel' = Referenz aus einem Partikel-Lauf desselben Planeten, 'start' = nur Anfangsfarbe
+  arghRefQuelle: 'detail', // Ansatz A ohne Foto: 'detail' = Anfangsfarbe + Wolkendetail, sofort; 'partikel' = Partikel-Lauf desselben Planeten (einige Sekunden im Hintergrund); 'start' = nur Anfangsfarbe
   arghRefRes: isPhone ? 1024 : 2048, // Ansatz A: Auflösung der Referenzkarte je Würfelfläche (2048: sichtbar mehr Wolkendetail aus dem Partikel-Lauf)
   arghRelax: 0.05,        // Ansatz A: Rückstellung der Abbildung zur Identität (1/s)
   arghFlow: 1,            // Ansatz A: Verstärkung des Wirbelanteils, der die Karte verformt
@@ -179,7 +181,7 @@ export interface Storm {
 // Regler, die nur die Ansicht betreffen (nicht die Rechnung): gehören nicht in den Schlüssel des gemerkten Zustands.
 export const VIEW_ONLY = new Set(['sunAngle', 'relief', 'limb', 'atmosphere', 'exposure', 'nebula', 'stars', 'spinSpeed', 'view', 'map',
   'paused', 'timeScale', 'pixelDensity', 'autoQuality', 'quality', 'reliefMulti', 'reliefCoarse', 'reliefFine', 'reliefSize', 'reliefAdapt',
-  'depthOn', 'depthStrength', 'depthSource', 'pomOn', 'pomHeight', 'pomShadow', 'arghOn', 'arghMix', 'arghDensity', 'arghAniso', 'arghSoft', 'arghShadow', 'arghRelax', 'arghFlow', 'twilight', 'rimGlow', 'remember', 'focusStorm', 'seamless']);
+  'depthOn', 'depthStrength', 'depthSource', 'pomOn', 'pomHeight', 'pomShadow', 'arghOn', 'arghMix', 'arghDensity', 'arghAniso', 'arghSoft', 'arghShadow', 'arghSmooth', 'arghEdge', 'arghRelax', 'arghFlow', 'twilight', 'rimGlow', 'remember', 'focusStorm', 'seamless']);
 
 /** Steckbrief oben links: bekannte Werte des Planeten (bei Zufallsplaneten plausibel geschätzt). */
 // Zustand der Oberfläche: Steckbrief ausgeklappt (Mehr/Weniger)

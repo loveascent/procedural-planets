@@ -115,7 +115,7 @@ export function eintritte(v: Varianten): { fluid: string[]; tracers: string[] } 
   if (v.fluid) fluid.push('advect', 'curl', 'forces', 'divergence', 'jacobi', 'project', ...(v.jets ? ['zonalClear', 'zonalSum'] : []));
   const tracers = ['initDye', 'advectDye'];
   if (v.curl) tracers.push('flowField');
-  if (v.karte) tracers.push('initWarp', 'advectWarp');
+  if (v.karte) tracers.push('initWarp', 'advectWarp', 'initRef');
   if (v.partikel) tracers.push('moveParticles');
   if (v.weich) tracers.push('blurRelax');
   if (v.verblassen) tracers.push('blurFade');

@@ -23,6 +23,10 @@ export function abschnittVerfahren(p: Panel, k: MenueKontext): Panel {
     .range('arghSoft', t('Argh: Streupunkte (weiche Haut)', 'Argh: scatter points (soft skin)'), 0, 16, 1,
       t('Wie viele Punkte entlang des Sehstrahls Streulicht liefern (Einfachstreuung wie im Blender-Nachbau). 0 = harte Haut mit einem Punkt, ab 4 weich und flauschig; mehr kostet Bildrate.',
         'How many points along the view ray scatter light (single scattering as in the Blender-style demo). 0 = hard skin with one point; from 4 soft and fluffy; more costs frame rate.'), (v: number) => v.toFixed(0))
+    .range('arghEdge', t('Argh: Randweichheit', 'Argh: edge softness'), 0, 4, 0.1,
+      t('Breite des Übergangs von dünn zu dicht an der Hautkante, in freien Weglängen. 0 = harte Stufe (ColorRamp Constant), größer = durchscheinende, flauschige Kanten ohne Rauschen.', 'Width of the thin-to-dense transition at the skin edge, in mean free paths. 0 = hard step (ColorRamp Constant); larger = translucent fluffy edges without noise.'), (v: number) => v.toFixed(1))
+    .range('arghSmooth', t('Argh: Glättung der Höhe', 'Argh: height smoothing'), 0, 4, 0.25,
+      t('Mip-Stufe, mit der die Höhe der Haut abgetastet wird. 0 = schärfste Karte, größer glättet die Facetten bei Nahansicht.', 'Mip level used to sample the skin height. 0 = sharpest map; larger smooths facets in close-ups.'), (v: number) => v.toFixed(2))
     .range('arghShadow', t('Argh: Schattenschritte', 'Argh: shadow steps'), 4, 32, 1, t('Schritte des Schattenstrahls zur Sonne je Streupunkt.', 'Steps of the shadow ray toward the sun per scatter point.'), (v: number) => v.toFixed(0))
     .select('arghSource', t('Argh: Farbquelle', 'Argh: colour source'),
       [['dye', t('Farbstoff live (Argh in Flüssigkeit)', 'Live dye (Argh in liquid)')], ['karte', t('Karte über Wind (Flüssigkeit in Argh)', 'Map over wind (liquid in Argh)')]],
@@ -31,11 +35,11 @@ export function abschnittVerfahren(p: Panel, k: MenueKontext): Panel {
     .file('arghFoto', t('Argh: Karte laden (Foto)', 'Argh: load map (photo)'),
       t('Äquirektangular-Karte eines Planeten (2:1). Sie ersetzt die Anfangsfarbe als Referenzkarte; die Strömung verwirbelt sie. Nur mit „Karte über Wind“.',
         'Equirectangular planet map (2:1). It replaces the initial colour as the reference map; the flow swirls it. Only with “Map over wind”.'),
-      (f) => k.app.ladeFoto(f).then(() => { k.app.needsDye = true; k.app.panel.refresh(); }))
+      (f) => k.app.ladeFoto(f).then(() => { k.app.fuelleKarte(); k.app.panel.refresh(); }))
     .select('arghRefQuelle', t('Argh: Referenz ohne Foto', 'Argh: reference without photo'),
-      [['partikel', t('Partikel-Lauf (feines Wolkendetail)', 'Particle run (fine cloud detail)')], ['start', t('nur Anfangsfarbe', 'initial colour only')]],
-      t('Woher die scharfe Referenzkarte kommt, wenn kein Foto geladen ist. Partikel-Lauf: derselbe Planet läuft einmal im Hintergrund mit der Darstellung „Partikel“ und gibt sein feines Wolkendetail als Karte ab. Nur Anfangsfarbe: glatte Bänder, wenig Struktur.',
-        'Where the sharp reference map comes from when no photo is loaded. Particle run: the same planet runs once in the background with the “Particles” look and hands over its fine cloud detail as the map. Initial colour only: smooth bands, little structure.'))
+      [['detail', t('Wolkendetail (sofort)', 'Cloud detail (instant)')], ['partikel', t('Partikel-Lauf (einige Sekunden)', 'Particle run (a few seconds)')], ['start', t('nur Anfangsfarbe', 'initial colour only')]],
+      t('Woher die scharfe Referenzkarte kommt, wenn kein Foto geladen ist. Wolkendetail: Anfangsfarbe des Planeten mit Gradientenrauschen, sofort da, wird vom Wind verwirbelt. Partikel-Lauf: derselbe Planet läuft einmal im Hintergrund mit der Darstellung „Partikel“ (einige Sekunden). Nur Anfangsfarbe: glatte Bänder, wenig Struktur.',
+        'Where the sharp reference map comes from when no photo is loaded. Cloud detail: the planet’s initial colour plus gradient noise, available at once, swirled by the wind. Particle run: the same planet runs once in the background with the “Particles” look (a few seconds). Initial colour only: smooth bands, little structure.'))
     .range('arghRefRes', t('Argh: Kartenauflösung', 'Argh: map resolution'), 256, 2048, 256, t('Texel je Würfelfläche der Referenzkarte (1024 ≈ 4096 Pixel um den Äquator).', 'Texels per cube face of the reference map (1024 ≈ 4096 pixels around the equator).'), (v: number) => v.toFixed(0))
     .range('arghRelax', t('Argh: Rückstellung', 'Argh: relaxation'), 0, 0.5, 0.005, t('Wie schnell die Abbildung zur Ausgangskarte zurückkehrt (1/s). 0 = nie, die Karte wird mit der Zeit zu Strichen gezogen.', 'How fast the mapping returns to the original map (1/s). 0 = never; the map is eventually stretched to streaks.'), (v: number) => v.toFixed(3))
     .range('arghFlow', t('Argh: Wirbelstärke auf die Karte', 'Argh: swirl on the map'), 0, 4, 0.05, t('Verstärkt den Wirbelanteil des Winds, der die Karte verformt (1 = wie die Strömung).', 'Scales the eddy part of the wind that deforms the map (1 = as the flow).'), f2);
