@@ -28,12 +28,5 @@ export function abschnittRelief(p: Panel, k: MenueKontext): Panel {
       t('Modul, zusätzlich. Verfolgt den Sichtstrahl in die Höhenkarte (Helligkeit plus Tiefe aus der Physik, falls an): hohe Stellen verdecken tiefe, Wirbelränder werfen Schatten in den Trichter. Kostet mehr Rechenleistung.',
         'Module, on top. Traces the view ray into the height map (brightness plus depth from physics, if on): high parts hide low ones, vortex rims cast shadows into the funnel. Costs more GPU.') + fx('Parallax Occlusion Mapping (Tatarchuk 2006)'))
     .range('pomHeight', t('Parallaxe-Höhe', 'Parallax height'), 0, 10, 0.05, t('Wie hoch die Höhenkarte für die Parallaxe ist.', 'How tall the height map is for parallax.'), f2)
-    .range('pomShadow', t('Eigenschatten', 'Self-shadow'), 0, 2, 0.05, t('Wie dunkel die Schatten in den Senken werden.', 'How dark shadows in the dips get.'), f2)
-    .toggle('arghOn', t('Argh-Volumen (Arghanion)', 'Argh volume (Arghanion)'),
-      t('Modul. Das Volumen-Verfahren aus Arghanions Blender-Tutorial (eigenes Demo: gasriese-volumen-demo), aber mit dem LIVE simulierten Farbstoff statt eines Fotos: die Farbe verschiebt einen Kugel-Dichtekörper, helle Wolken liegen tiefer, dunkle höher. Echte Silhouette, Schatten zur Sonne, verwirbelt mit der Strömung. Ersetzt die glatte Oberfläche.',
-        'Module. The volume method from Arghanion’s Blender tutorial (own demo: gasriese-volumen-demo), but driven by the LIVE simulated dye instead of a photo: colour displaces a spherical density body, bright clouds sit lower, dark ones higher. Real silhouette, shadows toward the sun, swirls with the flow. Replaces the smooth surface.')
-      + fx('q = p ⊙ (1 − f + f·C),  Dichte = σ·[1 − |q| ≥ t],  L = C · f_HG · E · e^(−∫σ ds)'))
-    .range('arghMix', t('Argh: Verschiebung f', 'Argh: displacement f'), 0, 0.2, 0.002, t('Mix-Faktor f aus dem Video (0,054). Größer = tiefere Täler und höhere Wolkenberge.', 'Mix factor f from the video (0.054). Larger = deeper valleys and taller cloud tops.'), (v: number) => v.toFixed(3))
-    .range('arghDensity', t('Argh: Dichte', 'Argh: density'), 5, 200, 1, t('Extinktion je Planetenradius. Klein = weiche, durchscheinende Haut; groß = harte Kante.', 'Extinction per planet radius. Small = soft, translucent skin; large = hard edge.'), (v: number) => v.toFixed(0))
-    .range('arghAniso', t('Argh: Anisotropie g', 'Argh: anisotropy g'), -0.9, 0.9, 0.01, t('Henyey-Greenstein: > 0 streut nach vorn (Gegenlicht hell), 0 wie im Video.', 'Henyey-Greenstein: > 0 scatters forward (bright backlight), 0 as in the video.'), f2);
+    .range('pomShadow', t('Eigenschatten', 'Self-shadow'), 0, 2, 0.05, t('Wie dunkel die Schatten in den Senken werden.', 'How dark shadows in the dips get.'), f2);
 }
