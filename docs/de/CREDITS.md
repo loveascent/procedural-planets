@@ -36,6 +36,7 @@ Die Implementierung ist eigenständig. Wir danken den Autorinnen und Autoren:
 | Mark Jarzynski, Marc Olano, *Hash Functions for GPU Rendering*, JCGT 2020 | `pcg3d`-Hash |
 | Marcel Minnaert, 1941 | Randverdunkelung |
 | Krzysztof Narkowicz, *ACES Filmic Tone Mapping Curve* (2016) | Tonemapping |
+| Arghanion's Puzzlebox, [*Create an Epic Volumetric Gas Giant!*](https://www.youtube.com/watch?v=CrAn6j8S1gg) (Blender-Tutorial, nach Rui Huang) | Modul „Argh-Volumen“: von der Farbe verschobene Kugel-Dichte, konstante Farbrampe, Principled Volume; aus dem Nodebaum nachgebaut, keine Dateien übernommen |
 
 ### Physik und Messdaten (nur zur Kalibrierung, keine Bilder im Projekt)
 | Quelle | Verwendung |

@@ -36,6 +36,7 @@ export function writeRender(app: App) {
     app.S.depthOn ? 1 : 0, app.S.depthStrength, app.S.depthSource === 'pressure' && app.flowMode() === 'fluid' ? 0 : 1, app.S.velRes,
     app.S.pomOn ? 1 : 0, app.S.pomHeight, app.S.pomShadow, app.S.reliefSize,
     ({ v04: 0, off: 1, soft: 2 } as Record<string, number>)[app.S.twilight] ?? 0, ({ v04: 0, soft: 1, off: 2 } as Record<string, number>)[app.S.rimGlow] ?? 0, 0, 0,
+    app.S.arghOn ? 1 : 0, app.S.arghMix, app.S.arghDensity, app.S.arghAniso,
   ], 16);
   app.device.queue.writeBuffer(app.renderBuf, 0, d);
 }

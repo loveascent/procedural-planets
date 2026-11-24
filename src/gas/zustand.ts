@@ -82,6 +82,10 @@ export const S = {
   pomOn: false,           // Parallaxe mit Eigenschatten
   pomHeight: 1,
   pomShadow: 1,
+  arghOn: false,          // Argh-Volumen (Arghanion): Haut eines Dichtefelds aus dem live Farbstoff
+  arghMix: 0.054,         // Mix-Faktor f (Wert aus dem Video)
+  arghDensity: 42,        // Dichte σ je Planetenradius (Video: 1 je Blender-Einheit, Planet ≈ 42 Einheiten)
+  arghAniso: 0,           // Anisotropie g (Principled Volume, Video: 0)
   relief: 1,              // Flüssigkeit 1,0 (Vorgabe des Urhebers), Partikel 0,35 – siehe RELIEF_BY_LOOK
   limb: 1.15,
   atmosphere: 1,
@@ -145,7 +149,7 @@ export const OFF_STORMS = OFF_BANDS + TABLE * 4;
 export const OFF_INFO = OFF_STORMS + MAX_STORMS * 4;
 export const OFF_WEIGHT = OFF_INFO + MAX_STORMS * 4;
 export const SIM_FLOATS = OFF_WEIGHT + MAX_STORMS;
-export const RENDER_FLOATS = 16 + 4 * 15;
+export const RENDER_FLOATS = 16 + 4 * 16;
 // Fester Zeitschritt: Zeitraffer und Einschwingen machen mehr Schritte, nicht größere.
 export const DT = 1 / 60;
 // Vorrechnen beim Start (unsichtbar, hinter dem Ladebild): 20 s Simulationszeit, damit der
@@ -168,7 +172,7 @@ export interface Storm {
 // Regler, die nur die Ansicht betreffen (nicht die Rechnung): gehören nicht in den Schlüssel des gemerkten Zustands.
 export const VIEW_ONLY = new Set(['sunAngle', 'relief', 'limb', 'atmosphere', 'exposure', 'nebula', 'stars', 'spinSpeed', 'view', 'map',
   'paused', 'timeScale', 'pixelDensity', 'autoQuality', 'quality', 'reliefMulti', 'reliefCoarse', 'reliefFine', 'reliefSize', 'reliefAdapt',
-  'depthOn', 'depthStrength', 'depthSource', 'pomOn', 'pomHeight', 'pomShadow', 'twilight', 'rimGlow', 'remember', 'focusStorm', 'seamless']);
+  'depthOn', 'depthStrength', 'depthSource', 'pomOn', 'pomHeight', 'pomShadow', 'arghOn', 'arghMix', 'arghDensity', 'arghAniso', 'twilight', 'rimGlow', 'remember', 'focusStorm', 'seamless']);
 
 /** Steckbrief oben links: bekannte Werte des Planeten (bei Zufallsplaneten plausibel geschätzt). */
 // Zustand der Oberfläche: Steckbrief ausgeklappt (Mehr/Weniger)

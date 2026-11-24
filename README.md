@@ -70,6 +70,7 @@ played directly in the browser.
 | **v0.7.0** | 2026-09-29 | One page for all bodies, frozen versions selectable in the header, relief, parallax self-shadow, twilight rim, searchable menus | [current page](https://loveascent.github.io/procedural-planets/index.html) |
 | **v0.8.0** | 2026-10-06 | Everything split into switchable building blocks; deterministic image tests prove the split changed no pixel | (source) |
 | **v0.9.0** | 2026-10-06 | Solar system: 20 planets, moons and a sun, N-body gravity, collisions with fragmentation and debris | (source) |
+| **v1.2.0** | 2026-11-24 | Gas giant: “Argh volume” module (Relief section): Arghanion's volumetric gas giant method (density body displaced by colour, single scattering, sun shadow ray), driven live by the simulated dye instead of a photo | [gas giant](https://loveascent.github.io/procedural-planets/index.html) |
 | **v1.1.0** | 2026-10-24 | Moon (`?body=moon`): rocky-planet engine with a crater formula instead of the volcano formula | [moon](https://loveascent.github.io/procedural-planets/index.html?body=moon) |
 | **v1.0.0** | 2026-10-06 | Collision model after Leinhardt & Stewart (2012), real gas giants and rocky planets running live inside the system, save/load, fact sheets | [solar system](https://loveascent.github.io/procedural-planets/index.html?body=welt) |
 
@@ -92,6 +93,10 @@ with many solar systems is planned and shown greyed out in the header.
   hybrid run as separate tracks instead of one mixed method.
 - **Fixed time step:** the simulation advances in fixed steps independent of the frame rate, so a
   60 Hz laptop and a 240 Hz desktop show the same atmosphere, and time lapse keeps the physics.
+- **Argh volume (switch, off by default):** the cloud deck as a real density body after Arghanion's Blender
+  tutorial: the colour displaces a sphere (q = p ⊙ (1 − f + f·C)), a constant colour ramp gives a dense skin, single
+  scattering with a shadow ray to the sun. The colour C is the live dye of the simulation, so the volume swirls with the flow;
+  real bumpy silhouette and terminator. Standalone photo version: [gasriese-volumen-demo](https://github.com/loveascent/gasriese-volumen-demo).
 - **Rendering:** oblate ellipsoid, Minnaert limb darkening, cloud relief with parallax self-shadow,
   haze rim, rings with shadows, ACES tone mapping.
 

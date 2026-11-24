@@ -137,6 +137,7 @@ direction (in body coordinates), the rest uniform on the sphere.
 | Haze rim | e^{−h/0.025}·sun factor at the limb |
 | Rings | plane y = 0 in the body frame, density profile with Cassini division, shadows both ways |
 | Ring anti-aliasing | pixel footprint = t·pixel angle/|d_y|; detail fades out once narrower than a pixel |
+| Argh volume (`shader/argh.ts`) | Arghanion's node tree: q = p ⊙ (1 − f + f·C), density σ·[0.999999 − \|q\| ≥ t]; scaled so the outermost skin lies on the ellipsoid, the ramp position t cancels: inside ⇔ \|hs ⊙ (1 − f + f·C)\| ≤ 1 − f. Light: single scattering L = C · 4π f_HG(g) · E · exp(−∫σ ds) at the first scattering point (½ mean free path into the skin); 48 search steps + 6 bisections, 24-step shadow ray. C = live dye |
 | Tone mapping | ACES fit (Narkowicz), then gamma 2.2 |
 
 ## 6. Coffee demo (`demos/coffee.html`)

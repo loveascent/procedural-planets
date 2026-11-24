@@ -68,6 +68,7 @@ Fassungen laufen direkt im Browser.
 | **v0.7.0** | 29.09.2026 | Eine Seite für alle Körper, eingefrorene Versionen im Kopf wählbar, Relief, Parallaxe-Eigenschatten, Dämmerungssaum, Menüs mit Suche | [aktuelle Seite](https://loveascent.github.io/procedural-planets/index.html) |
 | **v0.8.0** | 06.10.2026 | Alles in schaltbare Bausteine zerlegt; deterministische Bildprüfungen belegen: kein Pixel verändert | (Quelltext) |
 | **v0.9.0** | 06.10.2026 | Sonnensystem: 20 Planeten, Monde und Sonne, N-Körper-Schwerkraft, Kollisionen mit Zerschlagung und Trümmern | (Quelltext) |
+| **v1.2.0** | 24.11.2026 | Gasriese: Modul „Argh-Volumen“ (Abschnitt Relief): Arghanions Volumen-Gasriese (Dichtekörper von der Farbe verschoben, Einfachstreuung, Schattenstrahl zur Sonne), live angetrieben vom simulierten Farbstoff statt eines Fotos | [Gasriese](https://loveascent.github.io/procedural-planets/index.html) |
 | **v1.1.0** | 24.10.2026 | Mond (`?body=moon`): Motor des Gesteinsplaneten mit Kraterformel statt Vulkanformel | [Mond](https://loveascent.github.io/procedural-planets/index.html?body=moon) |
 | **v1.0.0** | 06.10.2026 | Kollisionsmodell nach Leinhardt & Stewart (2012), echte Gasriesen und Gesteinsplaneten laufen live im System, Speichern/Laden, Steckbriefe | [Sonnensystem](https://loveascent.github.io/procedural-planets/index.html?body=welt) |
 
@@ -92,6 +93,10 @@ Sonnensystemen ist geplant und im Kopf ausgegraut zu sehen.
   60-Hz-Laptop und ein 240-Hz-Rechner zeigen dieselbe Atmosphäre, und der Zeitraffer behält die Physik.
 - **Darstellung:** abgeplattetes Ellipsoid, Minnaert-Randverdunklung, Wolkenrelief mit
   Parallaxe-Eigenschatten, Dunstsaum, Ringe mit Schatten, ACES-Tonemapping.
+- **Argh-Volumen (Schalter, Standard aus):** die Wolkendecke als echter Dichtekörper nach Arghanions Blender-Tutorial: die Farbe
+  verschiebt eine Kugel (q = p ⊙ (1 − f + f·C)), eine konstante Farbrampe ergibt eine dichte Haut, Einfachstreuung mit Schattenstrahl
+  zur Sonne. Die Farbe C ist der live Farbstoff der Simulation, darum verwirbelt das Volumen mit der Strömung; echte buckelige Silhouette.
+  Fassung mit Foto: [gasriese-volumen-demo](https://github.com/loveascent/gasriese-volumen-demo).
 
 ### Gesteinsplaneten: Gelände, Wasser und Luft aus einem Seed (`src/rocky/`, `src/sky/`)
 - **Gelände:** Höhen- und Feuchtekarten je Würfelseite aus fBm- und Ridged-Simplex-Rauschen (Verfahren

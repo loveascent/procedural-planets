@@ -131,6 +131,7 @@ Farbe mit Deckkraft α·sin(π·Alter/Lebensdauer) in die Textur, danach Weichze
 | Dunstsaum | e^{−h/0,025}·Sonnenstand am Rand |
 | Ringe | Ebenenschnitt y = 0 im Körpersystem, Dichteprofil mit Cassini-Teilung, Schatten beidseitig |
 | Ring-Antialiasing | Pixel-Fußabdruck = t·Pixelwinkel/|d_y|; Feinstruktur wird ausgeblendet, sobald schmaler als ein Pixel |
+| Argh-Volumen (`shader/argh.ts`) | Arghanions Nodebaum: q = p ⊙ (1 − f + f·C), Dichte σ·[0,999999 − \|q\| ≥ t]; so skaliert, dass die äußerste Haut auf dem Ellipsoid liegt, die Rampenstelle t kürzt sich: innen ⇔ \|hs ⊙ (1 − f + f·C)\| ≤ 1 − f. Licht: Einfachstreuung L = C · 4π f_HG(g) · E · exp(−∫σ ds) am ersten Streupunkt (½ freie Weglänge in der Haut); 48 Suchschritte + 6 Halbierungen, Schattenstrahl 24 Schritte. C = live Farbstoff |
 | Tonemapping | ACES-Näherung (Narkowicz), dann Gamma 2,2 |
 
 ## 6. Kaffee-Demo (`demos/coffee.html`)
