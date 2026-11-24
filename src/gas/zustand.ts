@@ -86,7 +86,7 @@ export const S = {
   arghMix: 0.12,          // Mix-Faktor f (Video: 0,054; mit scharfer Karte gemessen: 0,12 zeigt deutlich Relief ohne Klumpen, 0,2 für Fotos)
   arghDensity: 30,        // Dichte σ je Planetenradius (Video-Referenz des Auftraggebers: 0,3 je Blender-Einheit bei Würfelkante 100 → 30)
   arghAniso: 0,           // Anisotropie g (Principled Volume, Video: 0)
-  arghJitter: false,      // Streupunkte mit zufälligem Versatz je Pixel (Blender-Art: sehr flauschig, aber körnig); aus = deterministisch ohne Rauschen
+  arghAbtast: 'verschachtelt', // Versatz der Streupunkte: 'fest' (ein Raster, kann Stufen zeigen), 'verschachtelt' (3×3-Kachel mit festen Versätzen, danach 3×3-Mittel: wie 9-fache Abtastung, ohne Rauschen), 'zufall' (je Pixel gewürfelt wie das Blender-Demo: körnig)
   arghEdge: 0.3,            // Randweichheit in freien Weglängen (Breite der Dichterampe an der Hautkante); 0 = harte Stufe wie ColorRamp „Constant“
   arghSmooth: 0.25,          // Glättung der Höhe (Mip-Stufe), entfernt Facetten bei Vergrößerung
   arghSoft: isPhone ? 3 : 10, // Streupunkte der weichen Haut (0 = harte Haut); Handy 3 (5080: 1,8 ms statt 4,6 ms im vollen Bild)
@@ -182,7 +182,7 @@ export interface Storm {
 // Regler, die nur die Ansicht betreffen (nicht die Rechnung): gehören nicht in den Schlüssel des gemerkten Zustands.
 export const VIEW_ONLY = new Set(['sunAngle', 'relief', 'limb', 'atmosphere', 'exposure', 'nebula', 'stars', 'spinSpeed', 'view', 'map',
   'paused', 'timeScale', 'pixelDensity', 'autoQuality', 'quality', 'reliefMulti', 'reliefCoarse', 'reliefFine', 'reliefSize', 'reliefAdapt',
-  'depthOn', 'depthStrength', 'depthSource', 'pomOn', 'pomHeight', 'pomShadow', 'arghOn', 'arghMix', 'arghDensity', 'arghAniso', 'arghSoft', 'arghShadow', 'arghSmooth', 'arghEdge', 'arghJitter', 'arghRelax', 'arghFlow', 'twilight', 'rimGlow', 'remember', 'focusStorm', 'seamless']);
+  'depthOn', 'depthStrength', 'depthSource', 'pomOn', 'pomHeight', 'pomShadow', 'arghOn', 'arghMix', 'arghDensity', 'arghAniso', 'arghSoft', 'arghShadow', 'arghSmooth', 'arghEdge', 'arghAbtast', 'arghRelax', 'arghFlow', 'twilight', 'rimGlow', 'remember', 'focusStorm', 'seamless']);
 
 /** Steckbrief oben links: bekannte Werte des Planeten (bei Zufallsplaneten plausibel geschätzt). */
 // Zustand der Oberfläche: Steckbrief ausgeklappt (Mehr/Weniger)

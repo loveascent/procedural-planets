@@ -33,6 +33,13 @@ export function buildRenderPipe(a: App) {
     fragment: { module: m, entryPoint: 'fs', targets: [{ format: a.format }] },
     primitive: { topology: 'triangle-list' },
   });
+  // Verschachteltes Abtasten: zweite Pipeline schreibt die Argh-Schicht (zwei Ziele); die Haupt-Pipeline löst sie auf
+  a.renderPipeA = v.schichten ? a.device.createRenderPipeline({
+    layout: a.renderPipeLayout,
+    vertex: { module: m, entryPoint: 'vs' },
+    fragment: { module: m, entryPoint: 'fsArgh', targets: [{ format: 'rgba16float' }, { format: 'rgba16float' }] },
+    primitive: { topology: 'triangle-list' },
+  }) : null;
   a.renderKey = key;
 }
 

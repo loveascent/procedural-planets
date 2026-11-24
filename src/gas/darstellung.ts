@@ -38,7 +38,7 @@ export function writeRender(app: App) {
     ({ v04: 0, off: 1, soft: 2 } as Record<string, number>)[app.S.twilight] ?? 0, ({ v04: 0, soft: 1, off: 2 } as Record<string, number>)[app.S.rimGlow] ?? 0, 0, 0,
     app.S.arghOn ? 1 : 0, app.S.arghMix, app.S.arghDensity, app.S.arghAniso,
     app.S.arghSoft > 0 ? Math.max(2, Math.round(app.S.arghSoft * app.arghQ)) : 0, Math.max(4, Math.round(app.S.arghShadow * app.arghQ)), app.S.arghSmooth, app.S.arghEdge / Math.max(app.S.arghDensity, 1),
-    app.S.arghJitter ? 1 : 0, 0, 0, 0,
+    app.S.arghAbtast === 'zufall' ? 1 : 0, 0, 0, 0,
   ], 16);
   app.device.queue.writeBuffer(app.renderBuf, 0, d);
 }
@@ -71,7 +71,10 @@ export function frameOnce(app: App, real: number) {
   app.sky.tick(enc);
   app.writeRender();
 
-  const rbg = app.device.createBindGroup({
+  // Verschachteltes Abtasten (Argh): erst die Schicht rechnen (Platzhalter an den Schicht-Bindungen, sonst wäre dieselbe Textur Ziel und Quelle), dann auflösen
+  const geschichtet = !!app.renderPipeA && app.S.arghOn && app.S.arghAbtast === 'verschachtelt' && app.S.view === 0;
+  const leer = app.schichtLeer.createView();
+  const gruppe = (a: GPUTextureView, b: GPUTextureView) => app.device.createBindGroup({
     layout: app.renderPipe.getBindGroupLayout(0),
     entries: [
       { binding: 0, resource: { buffer: app.renderBuf } },
@@ -83,8 +86,33 @@ export function frameOnce(app: App, real: number) {
       { binding: 6, resource: app.sky.view },
       { binding: 7, resource: (app.ref ?? app.dummy).cube },
       { binding: 8, resource: (app.warp[app.wc] ?? app.dummy).cube },
+      { binding: 9, resource: a },
+      { binding: 10, resource: b },
     ],
   });
+  let rbg = gruppe(leer, leer);
+  if (geschichtet) {
+    const w = app.W, h = app.H;
+    if (!app.schichtA || app.schichtA.width !== w || app.schichtA.height !== h) {
+      app.schichtA?.destroy(); app.schichtB?.destroy();
+      const u = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING;
+      app.schichtA = app.device.createTexture({ size: [w, h], format: 'rgba16float', usage: u });
+      app.schichtB = app.device.createTexture({ size: [w, h], format: 'rgba16float', usage: u });
+    }
+    const va = app.schichtA.createView(), vb = app.schichtB!.createView();
+    const pa = enc.beginRenderPass({
+      colorAttachments: [
+        { view: va, loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] },
+        { view: vb, loadOp: 'clear', storeOp: 'store', clearValue: [0, -1, 0, 0] },
+      ],
+    });
+    pa.setPipeline(app.renderPipeA!);
+    pa.setBindGroup(0, gruppe(leer, leer));
+    if (ov?.ausschnitt) pa.setScissorRect(...ov.ausschnitt);
+    pa.draw(3);
+    pa.end();
+    rbg = gruppe(va, vb);
+  }
   const rp = enc.beginRenderPass({
     colorAttachments: [{ view: app.targetView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, app.S.transparent ? 0 : 1] }],
   });

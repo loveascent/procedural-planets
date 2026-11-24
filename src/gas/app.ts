@@ -61,6 +61,11 @@ export class App {
   pipes: Record<string, GPUComputePipeline> = {};
   pipesBuilt: string | null = null;
   renderPipe!: GPURenderPipeline;
+  /** verschachteltes Abtasten (Argh): Pipeline der Schicht, Schicht-Texturen (Größe des Bildes) und 1×1-Platzhalter */
+  renderPipeA: GPURenderPipeline | null = null;
+  schichtA: GPUTexture | null = null;
+  schichtB: GPUTexture | null = null;
+  schichtLeer: GPUTexture;
   renderPipeLayout: GPUPipelineLayout;
   renderKey: string | null = null;
   sky!: Sky;
@@ -122,6 +127,7 @@ export class App {
       this.ctx.configure({ device, format: this.format, alphaMode: 'opaque' });
     }
     // clamp-to-edge: im Flächeninneren wird nie über den Rand hinaus gefiltert (das übernimmt sampleCube).
+    this.schichtLeer = device.createTexture({ size: [1, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING });
     this.sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
     this.simBuf = device.createBuffer({ size: SIM_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.renderBuf = device.createBuffer({ size: RENDER_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -153,6 +159,8 @@ export class App {
         { binding: 6, visibility: F, texture: { sampleType: 'float', viewDimension: '2d-array' } },
         { binding: 7, visibility: F, texture: { sampleType: 'float', viewDimension: 'cube' } },   // Baustein Argh-Karte: Referenzkarte
         { binding: 8, visibility: F, texture: { sampleType: 'float', viewDimension: 'cube' } },   // Baustein Argh-Karte: Rückabbildung
+        { binding: 9, visibility: F, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },    // Argh-Schicht A (Streulicht, Transmission)
+        { binding: 10, visibility: F, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },   // Argh-Schicht B (Zustand, Trefferweite)
       ],
     })] });
     this.sky = new Sky(device, kopflos ? 16 : isPhone ? 512 : 1024);

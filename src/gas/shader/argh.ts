@@ -46,7 +46,7 @@ fn arghSchatten(p: vec3f, sun: vec3f, s: vec3f) -> f32 {
   for (var j = 0; j < n; j++) { tau += arghDicht((p + sun * (h2 * (f32(j) + 0.5))) * s) * h2; if (tau > 12.0) { break; } }
   return exp(-tau);
 }
-fn hook_argh(o: vec3f, d: vec3f, sun: vec3f, c: f32, tPlanet: f32, mode: i32) -> ArghOut {
+fn hook_argh(o: vec3f, d: vec3f, sun: vec3f, c: f32, tPlanet: f32, mode: i32, jit: f32) -> ArghOut {
   var r = ArghOut(0, -1.0, vec3f(0.0), 0.0);
   if (mode != 0 || U.p8.x < 0.5 || tPlanet < 0.0) { return r; }
   let f = U.p8.y; let s = vec3f(1.0, 1.0 / c, 1.0);
@@ -80,8 +80,6 @@ fn hook_argh(o: vec3f, d: vec3f, sun: vec3f, c: f32, tPlanet: f32, mode: i32) ->
   // von 6/K freien Weglängen (Mittelpunktregel, ohne Zufall: kein Rauschen); die Schleife des Nachbaus (licht.js, trace) bricht bei T < 0,003 ab, hier nach K Schritten
   let sig = max(U.p8.z, 1.0); let hk = 6.0 / (sig * f32(K));
   var T = 1.0; var L = vec3f(0.0);
-  // Zufall je Pixel (Schalter): wie der Nachbau würfelt er den Versatz; ohne Mittelung über Bilder körnig, mit sehr flauschiger Kante
-  let jit = select(0.5, hash21(d.xy * 913.7 + d.z * 311.3), U.p10.x > 0.5);
   for (var k = 0; k < K; k++) {
     let p = o + d * (hi + hk * (f32(k) + jit));
     let dd = arghDicht(p * s);
@@ -122,8 +120,60 @@ fn hook_argh_dunst(o: vec3f, d: vec3f, sun: vec3f, c: f32, tHit: f32, mode: i32)
 }
 `;
 
+// Versatz der Streupunkte je Pixel, Fassung ohne Zwischenschicht: 'fest' = Mitte des Schritts, 'zufall' = je Pixel gewürfelt (U.p10.x = 1; wie der Nachbau, körnig)
+export const ARGH_PIXEL = /* wgsl */`
+fn hook_argh_pixel(o: vec3f, d: vec3f, sun: vec3f, c: f32, tPlanet: f32, mode: i32, pos: vec2f) -> ArghOut {
+  let jit = select(0.5, hash21(d.xy * 913.7 + d.z * 311.3), U.p10.x > 0.5);
+  return hook_argh(o, d, sun, c, tPlanet, mode, jit);
+}
+`;
+
+// Verschachteltes Abtasten (Keller & Heidrich 2001, interleaved sampling): Schicht 1 rechnet die Haut mit einem festen Versatz je Pixel einer 3×3-Kachel
+// (neun verschiedene Versätze, Reihenfolge i·4 mod 9), die Auflösung mittelt je Pixel das 3×3-Fenster = alle neun Versätze genau einmal. Ergebnis: 9-fache Abtastung
+// der Streupunkte, aber ohne Zufall und ohne Körnung. Die Schicht trägt (Streulicht rgb, Transmission T) und (Zustand, Trefferweite).
+export const ARGH_SCHICHT = /* wgsl */`
+@group(0) @binding(9) var schichtA: texture_2d<f32>;
+@group(0) @binding(10) var schichtB: texture_2d<f32>;
+struct ArghSchicht { @location(0) a: vec4f, @location(1) b: vec4f };
+fn arghVersatz(pos: vec2f) -> f32 {
+  let p = vec2u(pos) % vec2u(3u);
+  let i = p.x + 3u * p.y;
+  return (f32((i * 4u) % 9u) + 0.5) / 9.0;
+}
+@fragment
+fn fsArgh(vin: VOut) -> ArghSchicht {
+  var r: ArghSchicht;
+  r.a = vec4f(0.0, 0.0, 0.0, 1.0);
+  r.b = vec4f(0.0, -1.0, 0.0, 0.0);
+  let mode = i32(U.p0.w);
+  if (mode != 0 || U.p1.x > 0.5 || U.p8.x < 0.5) { return r; }
+  let wp = U.invViewProj * vec4f(vin.ndc, 1.0, 1.0);
+  let dir = normalize(wp.xyz / wp.w - U.camPos.xyz);
+  let o = toBody(U.camPos.xyz); let d = toBody(dir);
+  let sun = normalize(toBody(U.sun.xyz)); let c = 1.0 - U.p0.x;
+  let a = hook_argh(o, d, sun, c, hitPlanet(o, d), mode, arghVersatz(vin.pos.xy));
+  if (a.an == 1) { r.a = vec4f(a.farbe, a.T); }
+  r.b = vec4f(f32(a.an), a.t, 0.0, 0.0);
+  return r;
+}
+fn hook_argh_pixel(o: vec3f, d: vec3f, sun: vec3f, c: f32, tPlanet: f32, mode: i32, pos: vec2f) -> ArghOut {
+  var r = ArghOut(0, -1.0, vec3f(0.0), 0.0);
+  if (mode != 0 || U.p8.x < 0.5) { return r; }
+  let n = vec2i(textureDimensions(schichtA)) - vec2i(1);
+  let ip = vec2i(pos);
+  var s = vec4f(0.0);
+  for (var dy = -1; dy <= 1; dy++) { for (var dx = -1; dx <= 1; dx++) { s += textureLoad(schichtA, clamp(ip + vec2i(dx, dy), vec2i(0), n), 0); } }
+  s /= 9.0;
+  let b = textureLoad(schichtB, clamp(ip, vec2i(0), n), 0);
+  let an0 = i32(b.x + 0.5);
+  if (s.a < 0.9999 || any(s.rgb > vec3f(0.0))) { r.an = 1; r.farbe = s.rgb; r.T = s.a; r.t = select(tPlanet, b.y, an0 == 1); }
+  else if (an0 == 2) { r.an = 2; }
+  return r;
+}
+`;
+
 export const ARGH_AUS = /* wgsl */`
 struct ArghOut { an: i32, t: f32, farbe: vec3f, T: f32 };
-fn hook_argh(o: vec3f, d: vec3f, sun: vec3f, c: f32, tPlanet: f32, mode: i32) -> ArghOut { return ArghOut(0, -1.0, vec3f(0.0), 0.0); }
+fn hook_argh_pixel(o: vec3f, d: vec3f, sun: vec3f, c: f32, tPlanet: f32, mode: i32, pos: vec2f) -> ArghOut { return ArghOut(0, -1.0, vec3f(0.0), 0.0); }
 fn hook_argh_dunst(o: vec3f, d: vec3f, sun: vec3f, c: f32, tHit: f32, mode: i32) -> vec4f { return vec4f(0.0, 0.0, 0.0, 1.0); }
 `;
