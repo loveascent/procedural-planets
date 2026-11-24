@@ -19,6 +19,7 @@ struct R {
   p6: vec4f,        // x Parallaxe an/aus, y Höhe, z Eigenschatten, w Größe (Mehrstufig)
   p7: vec4f,        // x Dämmerung (0 wie v0.4, 1 aus, 2 weich), y Randschimmer (0 wie v0.4, 1 weich, 2 aus)
   p8: vec4f,        // Argh-Volumen: x an/aus, y Mix-Faktor f, z Dichte σ (je Planetenradius), w Anisotropie g
+  p9: vec4f,        // Argh-Volumen: x Streupunkte der weichen Haut (0 = harte Haut), y Schattenschritte
 };
 
 @group(0) @binding(0) var<uniform> U: R;
@@ -108,7 +109,7 @@ fn fs(vin: VOut) -> @location(0) vec4f {
   if (tPlanet < 0.0) {
     col = hook_saum_aussen(col, o, d, sun, c);
   } else if (argh.an == 1) {
-    col = argh.farbe;
+    col = argh.farbe + argh.T * hook_saum_aussen(col, o, d, sun, c);   // weiche Haut: Rest scheint durch, wie ohne Planet
   } else {
     let hp = o + d * tPlanet;
     let hs = hp * vec3f(1.0, 1.0 / c, 1.0);

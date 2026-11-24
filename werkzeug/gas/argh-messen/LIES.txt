@@ -1,0 +1,8 @@
+Messwerkzeug fuer den Baustein "Argh-Volumen / Argh-Karte" (nur Chrome auf der RTX 5080, headless, nie im Browser-Pane).
+Voraussetzung: `npx vite --port 5174` im Repo, Python mit Playwright (E:\Claude\Tools\holen\.venv).
+  mess2.py <name> '<json Regler>' [foto|-] [warte_ms]   Bild + Schritte/s; Umgebung WHEEL=n zoomt, CLICK="600 s" NACH=ms spult vor
+  fps.py                                                 Bildrate je Konfiguration (rAF-Zaehler), Tabelle
+  metrik.py <bildnamen>                                  Detailenergie (Laplace/Helligkeit) eines Ausschnitts
+  dauer.py '<json>' <ms>                                 Konsolenmeldungen, z. B. Dauer des Partikel-Referenzlaufs
+  ref_argh.py <name> '<json>' [datei]                    Referenz: Standalone gasriese-volumen-demo (Port 5210) konvergiert rendern
+Bilder landen in _pruef/bilder (nicht versioniert). Reglerwerte setzen und onChange ausloesen wie das Menue (window.gasPlanet).

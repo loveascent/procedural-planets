@@ -25,6 +25,7 @@ import { flowMode, lookMode, dir } from './modi';
 import { applyQuality, calibrate, adaptScale, resize } from './qualitaet';
 import { cubeField, allocVel, memoryNote, allocDye, allocParticles } from './felder';
 import { buildPipes, buildRenderPipe, module } from './pipelines';
+import { allocKarte, fuelleKarte, ladeFoto } from './arghkarte';
 import { snapshot, remember, undo, redo, updateUndoButtons, restore, encode, decode, loadSaves, storeSaves, buildSaveSection } from './verlauf';
 
 // ---------------------------------------------------------------------------
@@ -69,6 +70,15 @@ export class App {
   aux!: CubeField;
   div!: CubeField;
   dye: CubeField[] = [];
+  /** Baustein „Argh-Karte“ (nur belegt, wenn an): Rückabbildung (2 Puffer), Referenzkarte, optional geladenes Foto */
+  warp: CubeField[] = [];
+  wc = 0;
+  ref: CubeField | null = null;
+  refNeu = false;
+  refMarke = 0;   // zählt Aufträge „Referenz aus Partikeln“, damit ein veralteter nichts mehr überschreibt
+  warpNeu = false;
+  foto: GPUTexture | null = null;
+  fotoInfo = '';
   flow!: CubeField;
   dummy: CubeField;
   parts!: GPUBuffer;
@@ -140,6 +150,8 @@ export class App {
         { binding: 4, visibility: F, texture: { sampleType: 'float', viewDimension: 'cube' } },
         { binding: 5, visibility: F, texture: { sampleType: 'float', viewDimension: 'cube' } },
         { binding: 6, visibility: F, texture: { sampleType: 'float', viewDimension: '2d-array' } },
+        { binding: 7, visibility: F, texture: { sampleType: 'float', viewDimension: 'cube' } },   // Baustein Argh-Karte: Referenzkarte
+        { binding: 8, visibility: F, texture: { sampleType: 'float', viewDimension: 'cube' } },   // Baustein Argh-Karte: Rückabbildung
       ],
     })] });
     this.sky = new Sky(device, kopflos ? 16 : isPhone ? 512 : 1024);
@@ -171,6 +183,10 @@ export class App {
   memoryNote() { return memoryNote(this); }
 
   allocDye() { return allocDye(this); }
+
+  allocKarte() { return allocKarte(this); }
+  fuelleKarte() { return fuelleKarte(this); }
+  ladeFoto(datei: Blob) { return ladeFoto(this, datei); }
 
   allocParticles() { return allocParticles(this); }
 

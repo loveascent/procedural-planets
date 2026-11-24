@@ -13,6 +13,8 @@ declare global {
       filmstrip: (o?: FilmOptions) => Promise<Filmstrip>;
       selftest: () => Promise<{ edge: number; interior: number; seamless: boolean }>;
       frame: () => number;
+      /** Test: nach dem Setzen eines Reglers in `settings` dessen Reaktion auslösen (wie das Menü) */
+      onChange: (key: keyof typeof S) => void;
     };
   }
 }
@@ -47,6 +49,7 @@ async function start() {
   window.gasPlanet = {
     settings: S, capture: () => app.capture(), readRow: (w, f, y) => app.readRow(w, f, y),
     filmstrip: (o) => app.filmstrip(o), selftest: () => app.selftest(), frame: () => app.frameCount(),
+    onChange: (k) => app.onChange(k),
   };
   document.getElementById('lang')?.addEventListener('click', () => app.toggleLang());
   window.addEventListener('keydown', (e) => {

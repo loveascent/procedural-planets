@@ -83,9 +83,16 @@ export const S = {
   pomHeight: 1,
   pomShadow: 1,
   arghOn: false,          // Argh-Volumen (Arghanion): Haut eines Dichtefelds aus dem live Farbstoff
-  arghMix: 0.054,         // Mix-Faktor f (Wert aus dem Video)
-  arghDensity: 42,        // Dichte σ je Planetenradius (Video: 1 je Blender-Einheit, Planet ≈ 42 Einheiten)
+  arghMix: 0.12,          // Mix-Faktor f (Video: 0,054; mit scharfer Karte gemessen: 0,12 zeigt deutlich Relief ohne Klumpen, 0,2 für Fotos)
+  arghDensity: 30,        // Dichte σ je Planetenradius (Video-Referenz des Auftraggebers: 0,3 je Blender-Einheit bei Würfelkante 100 → 30)
   arghAniso: 0,           // Anisotropie g (Principled Volume, Video: 0)
+  arghSoft: 12,           // Streupunkte der weichen Haut (0 = harte Haut, ein Streupunkt); gemessen: 12 ≈ 76 fps im Nahbild (Planet füllt das Bild, Pixeldichte 2), 16 ≈ 68 fps
+  arghShadow: 16,         // Schritte des Schattenstrahls zur Sonne
+  arghSource: 'karte',    // Farbquelle des Volumens: 'karte' = Referenzkarte über Wind-Rückabbildung (Ansatz A, gemessen besser), 'dye' = live Farbstoff (Ansatz B)
+  arghRefQuelle: 'partikel', // Ansatz A ohne Foto: 'partikel' = Referenz aus einem Partikel-Lauf desselben Planeten, 'start' = nur Anfangsfarbe
+  arghRefRes: isPhone ? 1024 : 2048, // Ansatz A: Auflösung der Referenzkarte je Würfelfläche (2048: sichtbar mehr Wolkendetail aus dem Partikel-Lauf)
+  arghRelax: 0.05,        // Ansatz A: Rückstellung der Abbildung zur Identität (1/s)
+  arghFlow: 1,            // Ansatz A: Verstärkung des Wirbelanteils, der die Karte verformt
   relief: 1,              // Flüssigkeit 1,0 (Vorgabe des Urhebers), Partikel 0,35 – siehe RELIEF_BY_LOOK
   limb: 1.15,
   atmosphere: 1,
@@ -149,7 +156,7 @@ export const OFF_STORMS = OFF_BANDS + TABLE * 4;
 export const OFF_INFO = OFF_STORMS + MAX_STORMS * 4;
 export const OFF_WEIGHT = OFF_INFO + MAX_STORMS * 4;
 export const SIM_FLOATS = OFF_WEIGHT + MAX_STORMS;
-export const RENDER_FLOATS = 16 + 4 * 16;
+export const RENDER_FLOATS = 16 + 4 * 17;   // Matrix + 17 vec4 (camPos … p9), muss zu struct R in render_basis.ts passen
 // Fester Zeitschritt: Zeitraffer und Einschwingen machen mehr Schritte, nicht größere.
 export const DT = 1 / 60;
 // Vorrechnen beim Start (unsichtbar, hinter dem Ladebild): 20 s Simulationszeit, damit der
@@ -172,7 +179,7 @@ export interface Storm {
 // Regler, die nur die Ansicht betreffen (nicht die Rechnung): gehören nicht in den Schlüssel des gemerkten Zustands.
 export const VIEW_ONLY = new Set(['sunAngle', 'relief', 'limb', 'atmosphere', 'exposure', 'nebula', 'stars', 'spinSpeed', 'view', 'map',
   'paused', 'timeScale', 'pixelDensity', 'autoQuality', 'quality', 'reliefMulti', 'reliefCoarse', 'reliefFine', 'reliefSize', 'reliefAdapt',
-  'depthOn', 'depthStrength', 'depthSource', 'pomOn', 'pomHeight', 'pomShadow', 'arghOn', 'arghMix', 'arghDensity', 'arghAniso', 'twilight', 'rimGlow', 'remember', 'focusStorm', 'seamless']);
+  'depthOn', 'depthStrength', 'depthSource', 'pomOn', 'pomHeight', 'pomShadow', 'arghOn', 'arghMix', 'arghDensity', 'arghAniso', 'arghSoft', 'arghShadow', 'arghRelax', 'arghFlow', 'twilight', 'rimGlow', 'remember', 'focusStorm', 'seamless']);
 
 /** Steckbrief oben links: bekannte Werte des Planeten (bei Zufallsplaneten plausibel geschätzt). */
 // Zustand der Oberfläche: Steckbrief ausgeklappt (Mehr/Weniger)

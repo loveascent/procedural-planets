@@ -27,6 +27,7 @@ import { KONVEKTION, KONVEKTION_AUS } from './konvektion';
 import { STURMFARBE, STURMFARBE_AUS } from './sturmfarbe';
 import { BANDRUECK, BANDRUECK_AUS } from './bandrueck';
 import { CURLFLUSS } from './curlfluss';
+import { WARP } from './argh_karte';
 import { PARTIKEL } from './partikel';
 import { PARTIKEL_WEICH } from './partikel_weich';
 import { PARTIKEL_VERBLASSEN } from './partikel_verblassen';
@@ -51,6 +52,7 @@ export interface Varianten {
   partikel: boolean;     // Partikel bewegen
   weich: boolean;        // Darstellung „Partikel“ (zurück zur Bandfarbe)
   verblassen: boolean;   // Darstellung „Partikel rein“ (zur Mittelfarbe)
+  karte: boolean;        // Baustein Argh-Karte: Rückabbildung mit dem Wind mitführen
 }
 
 export function varianten(S: typeof Einstellungen): Varianten {
@@ -73,6 +75,7 @@ export function varianten(S: typeof Einstellungen): Varianten {
     partikel: S.look !== 'dye',
     weich: S.look === 'particles',
     verblassen: S.look === 'pure',
+    karte: S.arghOn && S.arghSource === 'karte',
   };
 }
 
@@ -99,6 +102,7 @@ export function tracerCode(v: Varianten): string {
   c += v.bandrueck ? BANDRUECK : BANDRUECK_AUS;
   c += FARBSTOFF;
   if (v.curl) c += CURLFLUSS;
+  if (v.karte) c += WARP;
   if (v.partikel) c += PARTIKEL;
   if (v.weich) c += PARTIKEL_WEICH;
   if (v.verblassen) c += PARTIKEL_VERBLASSEN;
@@ -111,6 +115,7 @@ export function eintritte(v: Varianten): { fluid: string[]; tracers: string[] } 
   if (v.fluid) fluid.push('advect', 'curl', 'forces', 'divergence', 'jacobi', 'project', ...(v.jets ? ['zonalClear', 'zonalSum'] : []));
   const tracers = ['initDye', 'advectDye'];
   if (v.curl) tracers.push('flowField');
+  if (v.karte) tracers.push('initWarp', 'advectWarp');
   if (v.partikel) tracers.push('moveParticles');
   if (v.weich) tracers.push('blurRelax');
   if (v.verblassen) tracers.push('blurFade');

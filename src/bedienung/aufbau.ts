@@ -64,6 +64,8 @@ export function custom(app: Panel, el: HTMLElement): Panel {
 /** Blendet Regler ein/aus, z. B. Partikel-Regler nur im Partikel-Modus. */
 export function visible(app: Panel, key: string, on: boolean) {
   for (const b of app.bindings) if (b.key === key) b.row.hidden = !on;
+  // Zeilen ohne Regler-Bindung (Datei-Auswahl) tragen ihren Schlüssel als data-key
+  for (const r of app.body.querySelectorAll<HTMLElement>(`.row[data-key="${key}"]`)) r.hidden = !on;
 }
 
 /** Regler, die im aktuellen Modus nichts bewirken: ausgegraut und nicht bedienbar. */

@@ -37,6 +37,7 @@ export function writeRender(app: App) {
     app.S.pomOn ? 1 : 0, app.S.pomHeight, app.S.pomShadow, app.S.reliefSize,
     ({ v04: 0, off: 1, soft: 2 } as Record<string, number>)[app.S.twilight] ?? 0, ({ v04: 0, soft: 1, off: 2 } as Record<string, number>)[app.S.rimGlow] ?? 0, 0, 0,
     app.S.arghOn ? 1 : 0, app.S.arghMix, app.S.arghDensity, app.S.arghAniso,
+    app.S.arghSoft, app.S.arghShadow, 0, 0,
   ], 16);
   app.device.queue.writeBuffer(app.renderBuf, 0, d);
 }
@@ -77,6 +78,8 @@ export function frameOnce(app: App, real: number) {
       { binding: 4, resource: app.aux.cube },
       { binding: 5, resource: app.prs[app.pc].cube },
       { binding: 6, resource: app.sky.view },
+      { binding: 7, resource: (app.ref ?? app.dummy).cube },
+      { binding: 8, resource: (app.warp[app.wc] ?? app.dummy).cube },
     ],
   });
   const rp = enc.beginRenderPass({

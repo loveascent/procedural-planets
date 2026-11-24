@@ -39,6 +39,7 @@ export function initIfNeeded(app: App) {
   app.writeSim(0, true);
   app.initFields(init, app.needsInit);
   app.device.queue.submit([init.finish()]);
+  app.fuelleKarte();   // Baustein Argh-Karte: Referenz und Abbildung neu füllen (aus: nichts)
   // Neue Farbe braucht etwas Zeit, bis die Strömung sie verwirbelt hat.
   app.warm = app.needsInit ? app.warmSteps : Math.max(app.warm, Math.min(300, app.warmSteps));
   app.warmTotal = app.warm;

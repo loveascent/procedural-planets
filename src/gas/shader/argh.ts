@@ -12,16 +12,39 @@
 //   (T < 0,003): L = Albedo · f_HG · E · T_sonne am ersten Streupunkt. Genau das rechnet dieser Baustein, ohne Aufsummieren über viele Bilder:
 //   Treffer suchen (48 Schritte durch die Schale, 6 Halbierungen), Streupunkt eine halbe freie Weglänge (½/σ) in der Haut, Schattenstrahl zur Sonne.
 //   f_HG mal 4π, damit g = 0 die Helligkeit der übrigen Darstellung behält (Lambert-Vollsonne = 1).
+// Farbquelle C (Image Texture): Ansatz B = der live simulierte Farbstoff; Ansatz A = die feste Referenzkarte, abgetastet über die vom Wind mitgeführte Rückabbildung
+// (Baustein Argh-Karte, sim: advectWarp). Nur eine der beiden Fassungen wird kompiliert.
+export const ARGH_FARBE_DYE = /* wgsl */`
+fn arghFarbe(hs: vec3f) -> vec3f { return textureSampleLevel(dyeTex, samp, normalize(hs), 0.0).rgb; }
+`;
+export const ARGH_FARBE_KARTE = /* wgsl */`
+@group(0) @binding(7) var refTex: texture_cube<f32>;
+@group(0) @binding(8) var warpTex: texture_cube<f32>;
+fn arghFarbe(hs: vec3f) -> vec3f {
+  let q = normalize(hs);
+  let w = q + textureSampleLevel(warpTex, samp, q, 0.0).xyz;                 // M(q) = q + d(q), d als Abweichung gespeichert
+  return textureSampleLevel(refTex, samp, normalize(w), 0.0).rgb;
+}
+`;
 export const ARGH = /* wgsl */`
-struct ArghOut { an: i32, t: f32, farbe: vec3f };   // an: 0 = Baustein aus, 1 = Haut getroffen, 2 = Strahl streift durch die Schale (Himmel/Saum)
+struct ArghOut { an: i32, t: f32, farbe: vec3f, T: f32 };   // an: 0 = Baustein aus, 1 = Haut getroffen, 2 = Strahl streift durch die Schale (Himmel/Saum); T = Resttransmission hinter der Haut
 fn arghDicht(hs: vec3f) -> f32 {
   let f = U.p8.y;
-  let C = textureSampleLevel(dyeTex, samp, normalize(hs), 0.0).rgb;      // Image Texture → live Farbstoff
+  let C = arghFarbe(hs);                                                  // Image Texture
   return select(0.0, U.p8.z, length(hs * (1.0 - f + f * C)) <= 1.0 - f);
 }
 fn arghHg(cosT: f32, g: f32) -> f32 { let d = 1.0 + g * g - 2.0 * g * cosT; return (1.0 - g * g) / pow(max(d, 1e-4), 1.5); }   // 4π · Henyey-Greenstein
+// Schattenstrahl (sunT im Nachbau): exp(−∫σ ds) bis zur äußeren Hülle, Abbruch bei τ > 12 wie dort; Schritte: U.p9.y
+fn arghSchatten(p: vec3f, sun: vec3f, s: vec3f) -> f32 {
+  let ps = p * s; let su = sun * s; let a2 = dot(su, su); let b2 = dot(ps, su);
+  let te = max((-b2 + sqrt(max(b2 * b2 - a2 * (dot(ps, ps) - 1.0), 0.0))) / a2, 0.0);
+  let n = i32(U.p9.y);
+  let h2 = te / f32(n); var tau = 0.0;
+  for (var j = 0; j < n; j++) { tau += arghDicht((p + sun * (h2 * (f32(j) + 0.5))) * s) * h2; if (tau > 12.0) { break; } }
+  return exp(-tau);
+}
 fn hook_argh(o: vec3f, d: vec3f, sun: vec3f, c: f32, tPlanet: f32, mode: i32) -> ArghOut {
-  var r = ArghOut(0, -1.0, vec3f(0.0));
+  var r = ArghOut(0, -1.0, vec3f(0.0), 0.0);
   if (mode != 0 || U.p8.x < 0.5 || tPlanet < 0.0) { return r; }
   let f = U.p8.y; let s = vec3f(1.0, 1.0 / c, 1.0);
   let os = o * s; let ds = d * s; let a = dot(ds, ds); let b = dot(os, ds);
@@ -38,20 +61,32 @@ fn hook_argh(o: vec3f, d: vec3f, sun: vec3f, c: f32, tPlanet: f32, mode: i32) ->
   }
   if (!hit && din <= 0.0) { r.an = 2; return r; }                         // buckelige Silhouette: vorbei
   for (var k = 0; k < 6; k++) { let m = 0.5 * (lo + hi); if (arghDicht((o + d * m) * s) > 0.0) { hi = m; } else { lo = m; } }
-  let p = o + d * (hi + 0.5 / max(U.p8.z, 1.0));                          // erster Streupunkt: ½ freie Weglänge in der Haut
-  // Schattenstrahl (sunT): exp(−∫σ ds) bis zur äußeren Hülle, 24 Schritte, Abbruch bei τ > 12 wie im Nachbau
-  let ps = p * s; let su = sun * s; let a2 = dot(su, su); let b2 = dot(ps, su);
-  let te = max((-b2 + sqrt(max(b2 * b2 - a2 * (dot(ps, ps) - 1.0), 0.0))) / a2, 0.0);
-  let h2 = te / 24.0; var tau = 0.0;
-  for (var j = 0; j < 24; j++) { tau += arghDicht((p + sun * (h2 * (f32(j) + 0.5))) * s) * h2; if (tau > 12.0) { break; } }
-  let C = textureSampleLevel(dyeTex, samp, normalize(p * s), 0.0).rgb;    // Albedo = HSV(C), Hue/Sat/Val neutral
-  let licht = exp(-tau) * arghHg(dot(-sun, d), U.p8.w) * U.sun.w;
-  r.an = 1; r.t = hi; r.farbe = C * hook_ringschatten(licht, p, sun);
+  let ph = arghHg(dot(-sun, d), U.p8.w) * U.sun.w;
+  let K = i32(U.p9.x);
+  if (K <= 0) {
+    // harte Haut: ein Streupunkt eine halbe freie Weglänge unter dem Treffer
+    let p = o + d * (hi + 0.5 / max(U.p8.z, 1.0));
+    r.an = 1; r.t = hi; r.farbe = arghFarbe(p * s) * hook_ringschatten(arghSchatten(p, sun, s) * ph, p, sun);
+    return r;
+  }
+  // weiche Haut: die Einfachstreuung des Nachbaus, L = Σ T·(1 − e^(−σ·h))·C·f_HG·E·T_sonne, entlang des Strahls ab dem Treffer in K Schritten
+  // von 6/K freien Weglängen (Mittelpunktregel, Versatz je Pixel); die Schleife des Nachbaus (licht.js, trace) bricht bei T < 0,003 ab, hier nach K Schritten
+  let sig = max(U.p8.z, 1.0); let hk = 6.0 / (sig * f32(K)); let a1 = exp(-sig * hk);   // K Schritte decken 6 freie Weglängen ab (T = e^−6 ≈ 0,0025, wie der Abbruch T < 0,003 des Nachbaus)
+  var T = 1.0; var L = vec3f(0.0);
+  let jit = hash21(d.xy * 913.7 + d.z * 311.3);                             // fester Versatz je Pixel (der Nachbau würfelt ihn je Schritt und mittelt über Bilder)
+  for (var k = 0; k < K; k++) {
+    let p = o + d * (hi + hk * (f32(k) + jit));
+    if (arghDicht(p * s) > 0.0) {
+      L += T * (1.0 - a1) * arghFarbe(p * s) * hook_ringschatten(arghSchatten(p, sun, s) * ph, p, sun);
+      T *= a1;
+    }
+  }
+  r.an = 1; r.t = hi; r.farbe = L; r.T = T;
   return r;
 }
 `;
 
 export const ARGH_AUS = /* wgsl */`
-struct ArghOut { an: i32, t: f32, farbe: vec3f };
-fn hook_argh(o: vec3f, d: vec3f, sun: vec3f, c: f32, tPlanet: f32, mode: i32) -> ArghOut { return ArghOut(0, -1.0, vec3f(0.0)); }
+struct ArghOut { an: i32, t: f32, farbe: vec3f, T: f32 };
+fn hook_argh(o: vec3f, d: vec3f, sun: vec3f, c: f32, tPlanet: f32, mode: i32) -> ArghOut { return ArghOut(0, -1.0, vec3f(0.0), 0.0); }
 `;

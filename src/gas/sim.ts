@@ -1,5 +1,6 @@
 // Simulation: Uniforms schreiben, Rechenschritt (Stable Fluids oder Curl-Noise, Farbstoff, Partikel) auf der GPU.
 import type { App } from './app';
+import { schrittKarte } from './arghkarte';
 import { OFF_CENTRE, OFF_VIEW, OFF_MODE, OFF_STORMS, OFF_INFO, OFF_WEIGHT, CubeField, DT } from './zustand';
 
 /** init: alle Stürme mit voller Stärke, damit sie beim Start als Wirbel eingesetzt werden. */
@@ -22,7 +23,7 @@ export function writeSim(a: App, dt: number, init = false) {
   ], 0);
   d.set([...a.centre, a.S.fade], OFF_CENTRE);
   d.set([...a.camBody(), a.lookMode() === 'dye' ? 0 : a.S.viewFocus], OFF_VIEW);
-  d.set([a.lookMode() === 'pure' ? 1 : 0, eddy, 0, 0], OFF_MODE);
+  d.set([a.lookMode() === 'pure' ? 1 : 0, eddy, a.S.arghRelax, a.S.arghFlow], OFF_MODE);   // zw: Baustein Argh-Karte (Rückstellung, Verstärkung)
   list.forEach((s, i) => {
     const la = (s.lat * Math.PI) / 180, lo = (s.lon * Math.PI) / 180;
     d.set([Math.cos(la) * Math.cos(lo), Math.sin(la), Math.cos(la) * Math.sin(lo), (s.radius * a.S.stormSize * Math.PI) / 180], OFF_STORMS + i * 4);
@@ -101,6 +102,7 @@ export function step(a: App, enc: GPUCommandEncoder) {
     flowSrc = a.flow;
   }
 
+  schrittKarte(a, pass, flowSrc);   // Baustein Argh-Karte (aus: nichts)
   const look = a.lookMode();
   if (look === 'dye') {
     a.run2D(pass, 'advectDye', a.dye[a.dc], flowSrc, a.dye[1 - a.dc]); a.dc = 1 - a.dc;
