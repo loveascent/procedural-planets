@@ -80,8 +80,10 @@ fn hook_argh(o: vec3f, d: vec3f, sun: vec3f, c: f32, tPlanet: f32, mode: i32) ->
   // von 6/K freien Weglängen (Mittelpunktregel, ohne Zufall: kein Rauschen); die Schleife des Nachbaus (licht.js, trace) bricht bei T < 0,003 ab, hier nach K Schritten
   let sig = max(U.p8.z, 1.0); let hk = 6.0 / (sig * f32(K));
   var T = 1.0; var L = vec3f(0.0);
+  // Zufall je Pixel (Schalter): wie der Nachbau würfelt er den Versatz; ohne Mittelung über Bilder körnig, mit sehr flauschiger Kante
+  let jit = select(0.5, hash21(d.xy * 913.7 + d.z * 311.3), U.p10.x > 0.5);
   for (var k = 0; k < K; k++) {
-    let p = o + d * (hi + hk * (f32(k) + 0.5));
+    let p = o + d * (hi + hk * (f32(k) + jit));
     let dd = arghDicht(p * s);
     if (dd > 0.0) {
       let a1 = exp(-dd * hk);

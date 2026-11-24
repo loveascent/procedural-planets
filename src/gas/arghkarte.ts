@@ -3,7 +3,9 @@ import type { App } from './app';
 import type { CubeField } from './zustand';
 import { FOTO_NACH_WUERFEL, MIPS_WGSL } from './shader/argh_karte';
 import { App as AppKlasse } from './app';
-import { WARM_STEPS, isPhone } from './zustand';
+import { isPhone } from './zustand';
+
+const PARTIKEL_LAUF_SCHRITTE = 1200;   // 20 s Wolkenzeit, nur für die Auswahl „Partikel-Lauf“
 
 export const karteAn = (a: App) => a.S.arghOn && a.S.arghSource === 'karte';
 
@@ -149,7 +151,7 @@ export function schrittKarte(a: App, pass: GPUComputePassEncoder, flowSrc: CubeF
 
 /** Referenzkarte mit feinem Wolkendetail für beliebige Planeten ohne Foto: derselbe Planet (Vorlage oder Zufallsseed, gleiche Strömung) läuft in einer
  *  eigenen unsichtbaren Instanz mit der Darstellung „Partikel“ (Millionen Punkte malen die Farbe, Rezept jasper-r / Gaseous Giganticus, schon im Projekt)
- *  die Wolkenzeit der Seite (WARM_STEPS) voraus; ihr Farbstoff wird eingefroren und zur Referenz. Danach wird die Instanz freigegeben. */
+ *  20 s Wolkenzeit voraus; ihr Farbstoff wird eingefroren und zur Referenz. Danach wird die Instanz freigegeben. */
 async function referenzAusPartikeln(a: App) {
   const marke = ++a.refMarke;
   const t0 = performance.now();
@@ -165,7 +167,7 @@ async function referenzAusPartikeln(a: App) {
     h.writeSim(0, true);
     h.initFields(e, true);
     a.device.queue.submit([e.finish()]);
-    for (let i = 0; i < WARM_STEPS; i++) {
+    for (let i = 0; i < PARTIKEL_LAUF_SCHRITTE; i++) {
       h.submitStep();
       if (i % 24 === 23) { await a.device.queue.onSubmittedWorkDone(); if (marke !== a.refMarke || !a.ref || a.ref.n !== n) return; }
     }

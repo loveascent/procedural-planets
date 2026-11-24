@@ -48,8 +48,10 @@ export function initIfNeeded(app: App) {
   const fresh = app.needsInit;
   app.needsInit = false;
   app.needsDye = false;
-  showLoading(true);
   app.restored = false;
+  // Kein Vorlauf (WARM_STEPS = 0): kein Ladebild, die Wolken laufen sofort; Vorspulen nur auf Knopfdruck (skip)
+  if (app.warm > 0) showLoading(true);
+  else { showLoading(false); app.faceMainStorm(); }
   if (fresh && app.S.remember) void app.loadState();
 }
 

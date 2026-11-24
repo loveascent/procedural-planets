@@ -86,6 +86,7 @@ export const S = {
   arghMix: 0.12,          // Mix-Faktor f (Video: 0,054; mit scharfer Karte gemessen: 0,12 zeigt deutlich Relief ohne Klumpen, 0,2 für Fotos)
   arghDensity: 30,        // Dichte σ je Planetenradius (Video-Referenz des Auftraggebers: 0,3 je Blender-Einheit bei Würfelkante 100 → 30)
   arghAniso: 0,           // Anisotropie g (Principled Volume, Video: 0)
+  arghJitter: false,      // Streupunkte mit zufälligem Versatz je Pixel (Blender-Art: sehr flauschig, aber körnig); aus = deterministisch ohne Rauschen
   arghEdge: 0.3,            // Randweichheit in freien Weglängen (Breite der Dichterampe an der Hautkante); 0 = harte Stufe wie ColorRamp „Constant“
   arghSmooth: 0.25,          // Glättung der Höhe (Mip-Stufe), entfernt Facetten bei Vergrößerung
   arghSoft: isPhone ? 3 : 10, // Streupunkte der weichen Haut (0 = harte Haut); Handy 3 (5080: 1,8 ms statt 4,6 ms im vollen Bild)
@@ -158,12 +159,12 @@ export const OFF_STORMS = OFF_BANDS + TABLE * 4;
 export const OFF_INFO = OFF_STORMS + MAX_STORMS * 4;
 export const OFF_WEIGHT = OFF_INFO + MAX_STORMS * 4;
 export const SIM_FLOATS = OFF_WEIGHT + MAX_STORMS;
-export const RENDER_FLOATS = 16 + 4 * 17;   // Matrix + 17 vec4 (camPos … p9), muss zu struct R in render_basis.ts passen
+export const RENDER_FLOATS = 16 + 4 * 18;   // Matrix + 18 vec4 (camPos … p10), muss zu struct R in render_basis.ts passen
 // Fester Zeitschritt: Zeitraffer und Einschwingen machen mehr Schritte, nicht größere.
 export const DT = 1 / 60;
 // Vorrechnen beim Start (unsichtbar, hinter dem Ladebild): 20 s Simulationszeit, damit der
 // Planet "mitten im Geschehen" erscheint statt sichtbar bei null anzufangen.
-export const WARM_STEPS = 1200;
+export const WARM_STEPS = 0;   // Vorrechnen beim Start und bei Planetenwechsel: aus. Wer eingeschwungene Wolken will, nimmt die Knöpfe „20 s / 60 s / 600 s“.
 // Stufen für die automatische Qualität: [Windgitter, Farbauflösung]
 export const AUTO_TIERS: [number, number][] = [[256, 1536], [192, 1024], [128, 768], [128, 512], [96, 384], [64, 256]];
 // Budget für einen Simulationsschritt, damit neben dem Rendern 60 fps bleiben (16,7 ms pro Bild)
@@ -181,7 +182,7 @@ export interface Storm {
 // Regler, die nur die Ansicht betreffen (nicht die Rechnung): gehören nicht in den Schlüssel des gemerkten Zustands.
 export const VIEW_ONLY = new Set(['sunAngle', 'relief', 'limb', 'atmosphere', 'exposure', 'nebula', 'stars', 'spinSpeed', 'view', 'map',
   'paused', 'timeScale', 'pixelDensity', 'autoQuality', 'quality', 'reliefMulti', 'reliefCoarse', 'reliefFine', 'reliefSize', 'reliefAdapt',
-  'depthOn', 'depthStrength', 'depthSource', 'pomOn', 'pomHeight', 'pomShadow', 'arghOn', 'arghMix', 'arghDensity', 'arghAniso', 'arghSoft', 'arghShadow', 'arghSmooth', 'arghEdge', 'arghRelax', 'arghFlow', 'twilight', 'rimGlow', 'remember', 'focusStorm', 'seamless']);
+  'depthOn', 'depthStrength', 'depthSource', 'pomOn', 'pomHeight', 'pomShadow', 'arghOn', 'arghMix', 'arghDensity', 'arghAniso', 'arghSoft', 'arghShadow', 'arghSmooth', 'arghEdge', 'arghJitter', 'arghRelax', 'arghFlow', 'twilight', 'rimGlow', 'remember', 'focusStorm', 'seamless']);
 
 /** Steckbrief oben links: bekannte Werte des Planeten (bei Zufallsplaneten plausibel geschätzt). */
 // Zustand der Oberfläche: Steckbrief ausgeklappt (Mehr/Weniger)

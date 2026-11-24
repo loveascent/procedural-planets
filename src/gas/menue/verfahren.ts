@@ -23,6 +23,8 @@ export function abschnittVerfahren(p: Panel, k: MenueKontext): Panel {
     .range('arghSoft', t('Argh: Streupunkte (weiche Haut)', 'Argh: scatter points (soft skin)'), 0, 16, 1,
       t('Wie viele Punkte entlang des Sehstrahls Streulicht liefern (Einfachstreuung wie im Blender-Nachbau). 0 = harte Haut mit einem Punkt, ab 4 weich und flauschig; mehr kostet Bildrate.',
         'How many points along the view ray scatter light (single scattering as in the Blender-style demo). 0 = hard skin with one point; from 4 soft and fluffy; more costs frame rate.'), (v: number) => v.toFixed(0))
+    .toggle('arghJitter', t('Argh: Zufall der Streupunkte (Blender-Art)', 'Argh: random scatter points (Blender style)'),
+      t('Aus (Standard): die Streupunkte liegen fest, kein Rauschen. An: jeder Pixel würfelt den Versatz seiner Streupunkte wie das Blender-Demo; die Kanten werden sehr flauschig, das Bild ist aber körnig.', 'Off (default): scatter points are fixed, no noise. On: each pixel randomises the offset of its scatter points like the Blender demo; edges get very fluffy but the image is grainy.'))
     .range('arghEdge', t('Argh: Randweichheit', 'Argh: edge softness'), 0, 4, 0.1,
       t('Breite des Übergangs von dünn zu dicht an der Hautkante, in freien Weglängen. 0 = harte Stufe (ColorRamp Constant), größer = durchscheinende, flauschige Kanten ohne Rauschen.', 'Width of the thin-to-dense transition at the skin edge, in mean free paths. 0 = hard step (ColorRamp Constant); larger = translucent fluffy edges without noise.'), (v: number) => v.toFixed(1))
     .range('arghSmooth', t('Argh: Glättung der Höhe', 'Argh: height smoothing'), 0, 4, 0.25,

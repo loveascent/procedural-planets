@@ -38,6 +38,7 @@ export function writeRender(app: App) {
     ({ v04: 0, off: 1, soft: 2 } as Record<string, number>)[app.S.twilight] ?? 0, ({ v04: 0, soft: 1, off: 2 } as Record<string, number>)[app.S.rimGlow] ?? 0, 0, 0,
     app.S.arghOn ? 1 : 0, app.S.arghMix, app.S.arghDensity, app.S.arghAniso,
     app.S.arghSoft > 0 ? Math.max(2, Math.round(app.S.arghSoft * app.arghQ)) : 0, Math.max(4, Math.round(app.S.arghShadow * app.arghQ)), app.S.arghSmooth, app.S.arghEdge / Math.max(app.S.arghDensity, 1),
+    app.S.arghJitter ? 1 : 0, 0, 0, 0,
   ], 16);
   app.device.queue.writeBuffer(app.renderBuf, 0, d);
 }
@@ -45,6 +46,8 @@ export function writeRender(app: App) {
 /** Ein Bild: Simulationsschritt(e) und Darstellung. */
 export function frameOnce(app: App, real: number) {
   const ov = app.ansicht;
+  // Ohne Vorlauf wird die Schrittzeit nicht mehr gemessen: aus der Bildzeit nachführen (zu langsam → weniger Aufholschritte), wie in der Welt-Einbettung
+  if (!app.kopflos && real > 0) app.stepMs = Math.min(40, Math.max(0.5, app.stepMs * (real > 0.022 ? 1.25 : 0.985)));
   app.buildRenderPipe();   // Darstellungs-Bausteine an/aus: Pipeline nur neu bauen, wenn sich ein Schalter geändert hat
   app.initIfNeeded();
   let flowSrc = app.flowMode() === 'fluid' ? app.vel[app.vc] : app.flow;

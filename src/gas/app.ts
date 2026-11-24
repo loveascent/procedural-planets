@@ -101,7 +101,7 @@ export class App {
   // Vorrechnen: Schritte pro Auftrag, so bemessen, dass ein Auftrag ~40 ms GPU-Zeit braucht.
   warmRate = 4;
   warmTotal = WARM_STEPS;
-  stepMs = 0;          // gemessene GPU-Zeit pro Simulationsschritt
+  stepMs = 2;          // geschätzte Zeit pro Simulationsschritt (ms); ohne Vorlauf aus der Bildzeit nachgeführt (frameOnce)
   warmStart = 0;
   manualSkip = false;  // Vorspulen per Knopf: volle Länge, keine Begrenzung der Ladezeit
   calibrated = false;

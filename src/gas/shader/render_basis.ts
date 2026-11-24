@@ -20,6 +20,7 @@ struct R {
   p7: vec4f,        // x Dämmerung (0 wie v0.4, 1 aus, 2 weich), y Randschimmer (0 wie v0.4, 1 weich, 2 aus)
   p8: vec4f,        // Argh-Volumen: x an/aus, y Mix-Faktor f, z Dichte σ (je Planetenradius), w Anisotropie g
   p9: vec4f,        // Argh-Volumen: x Streupunkte der weichen Haut (0 = harte Haut), y Schattenschritte, z Glättung der Höhe (Mip-Stufe), w Breite der Randrampe (Planetenradien)
+  p10: vec4f,       // Argh-Volumen: x Zufall der Streupunkte an/aus
 };
 
 @group(0) @binding(0) var<uniform> U: R;
