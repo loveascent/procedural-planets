@@ -53,6 +53,7 @@ export function allocDye(a: App) {
     a.memoryNote();
     a.allocDye();
   });
+  a.allocKarte();   // Baustein Argh-Karte: Rückabbildung in Farbauflösung (nur wenn an)
   // Nur die Wolkenfarbe neu aufsetzen, der Wind läuft weiter.
   a.needsDye = true;
 }

@@ -83,9 +83,19 @@ export const S = {
   pomHeight: 1,
   pomShadow: 1,
   arghOn: false,          // Argh-Volumen (Arghanion): Haut eines Dichtefelds aus dem live Farbstoff
-  arghMix: 0.054,         // Mix-Faktor f (Wert aus dem Video)
-  arghDensity: 42,        // Dichte σ je Planetenradius (Video: 1 je Blender-Einheit, Planet ≈ 42 Einheiten)
+  arghMix: 0.211,         // Mix-Faktor f (Endstand des Tutorials/Referenz-Demo: 0,211; gemessen 25.11.: bei 0,12 wäscht die weiche Haut den Flausch aus)
+  arghDensity: 30,        // Dichte σ je Planetenradius (Video-Referenz des Auftraggebers: 0,3 je Blender-Einheit bei Würfelkante 100 → 30)
   arghAniso: 0,           // Anisotropie g (Principled Volume, Video: 0)
+  arghAbtast: 'verschachtelt', // Versatz der Streupunkte: 'fest' (ein Raster, kann Stufen zeigen), 'verschachtelt' (3×3-Kachel mit festen Versätzen, danach 3×3-Mittel: wie 9-fache Abtastung, ohne Rauschen), 'zufall' (je Pixel gewürfelt wie das Blender-Demo: körnig)
+  arghEdge: 0.1,            // Randweichheit in freien Weglängen (Breite der Dichterampe an der Hautkante); 0 = harte Stufe wie ColorRamp „Constant“
+  arghSmooth: 0,            // Glättung der Höhe (Mip-Stufe), entfernt Facetten bei Vergrößerung
+  arghSoft: isPhone ? 3 : 10, // Streupunkte der weichen Haut (0 = harte Haut); Handy 3 (5080: 1,8 ms statt 4,6 ms im vollen Bild)
+  arghShadow: isPhone ? 4 : 8, // Schritte des Schattenstrahls zur Sonne
+  arghSource: 'karte',    // Farbquelle des Volumens: 'karte' = Referenzkarte über Wind-Rückabbildung (Ansatz A, gemessen besser), 'dye' = live Farbstoff (Ansatz B)
+  arghRefQuelle: 'detail', // Ansatz A ohne Foto: 'detail' = Anfangsfarbe + Wolkendetail, sofort; 'partikel' = Partikel-Lauf desselben Planeten (einige Sekunden im Hintergrund); 'start' = nur Anfangsfarbe
+  arghRefRes: isPhone ? 1024 : 2048, // Ansatz A: Auflösung der Referenzkarte je Würfelfläche (2048: sichtbar mehr Wolkendetail aus dem Partikel-Lauf)
+  arghRelax: 0.05,        // Ansatz A: Rückstellung der Abbildung zur Identität (1/s)
+  arghFlow: 1,            // Ansatz A: Verstärkung des Wirbelanteils, der die Karte verformt
   relief: 1,              // Flüssigkeit 1,0 (Vorgabe des Urhebers), Partikel 0,35 – siehe RELIEF_BY_LOOK
   limb: 1.15,
   atmosphere: 1,
@@ -149,12 +159,12 @@ export const OFF_STORMS = OFF_BANDS + TABLE * 4;
 export const OFF_INFO = OFF_STORMS + MAX_STORMS * 4;
 export const OFF_WEIGHT = OFF_INFO + MAX_STORMS * 4;
 export const SIM_FLOATS = OFF_WEIGHT + MAX_STORMS;
-export const RENDER_FLOATS = 16 + 4 * 16;
+export const RENDER_FLOATS = 16 + 4 * 18;   // Matrix + 18 vec4 (camPos … p10), muss zu struct R in render_basis.ts passen
 // Fester Zeitschritt: Zeitraffer und Einschwingen machen mehr Schritte, nicht größere.
 export const DT = 1 / 60;
 // Vorrechnen beim Start (unsichtbar, hinter dem Ladebild): 20 s Simulationszeit, damit der
 // Planet "mitten im Geschehen" erscheint statt sichtbar bei null anzufangen.
-export const WARM_STEPS = 1200;
+export const WARM_STEPS = 0;   // Vorrechnen beim Start und bei Planetenwechsel: aus. Wer eingeschwungene Wolken will, nimmt die Knöpfe „20 s / 60 s / 600 s“.
 // Stufen für die automatische Qualität: [Windgitter, Farbauflösung]
 export const AUTO_TIERS: [number, number][] = [[256, 1536], [192, 1024], [128, 768], [128, 512], [96, 384], [64, 256]];
 // Budget für einen Simulationsschritt, damit neben dem Rendern 60 fps bleiben (16,7 ms pro Bild)
@@ -172,7 +182,7 @@ export interface Storm {
 // Regler, die nur die Ansicht betreffen (nicht die Rechnung): gehören nicht in den Schlüssel des gemerkten Zustands.
 export const VIEW_ONLY = new Set(['sunAngle', 'relief', 'limb', 'atmosphere', 'exposure', 'nebula', 'stars', 'spinSpeed', 'view', 'map',
   'paused', 'timeScale', 'pixelDensity', 'autoQuality', 'quality', 'reliefMulti', 'reliefCoarse', 'reliefFine', 'reliefSize', 'reliefAdapt',
-  'depthOn', 'depthStrength', 'depthSource', 'pomOn', 'pomHeight', 'pomShadow', 'arghOn', 'arghMix', 'arghDensity', 'arghAniso', 'twilight', 'rimGlow', 'remember', 'focusStorm', 'seamless']);
+  'depthOn', 'depthStrength', 'depthSource', 'pomOn', 'pomHeight', 'pomShadow', 'arghOn', 'arghMix', 'arghDensity', 'arghAniso', 'arghSoft', 'arghShadow', 'arghSmooth', 'arghEdge', 'arghAbtast', 'arghRelax', 'arghFlow', 'twilight', 'rimGlow', 'remember', 'focusStorm', 'seamless']);
 
 /** Steckbrief oben links: bekannte Werte des Planeten (bei Zufallsplaneten plausibel geschätzt). */
 // Zustand der Oberfläche: Steckbrief ausgeklappt (Mehr/Weniger)

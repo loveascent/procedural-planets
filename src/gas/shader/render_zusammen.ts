@@ -15,11 +15,11 @@ import { DAEMMERUNG_V04, DAEMMERUNG_WEICH, DAEMMERUNG_AUS } from './daemmerung';
 import { RAND_V04, RAND_WEICH, RAND_AUS } from './randschimmer';
 import { HIMMEL_GAS, HIMMEL_GAS_AUS } from './himmel_gas';
 import { DURCHSICHTIG, DURCHSICHTIG_AUS } from './durchsichtig';
-import { ARGH, ARGH_AUS } from './argh';
+import { ARGH, ARGH_AUS, ARGH_FARBE_DYE, ARGH_FARBE_KARTE, ARGH_PIXEL, ARGH_SCHICHT } from './argh';
 
 export interface RenderVarianten {
   himmel: boolean; karte: boolean; saum: boolean; ringe: boolean; ansichten: boolean; tiefe: boolean; parallaxe: boolean;
-  durchsichtig: boolean; argh: boolean; relief: 'aus' | 'einfach' | 'mehrstufig'; daemmerung: 'v04' | 'soft' | 'off'; rand: 'v04' | 'soft' | 'off';
+  durchsichtig: boolean; argh: boolean; arghKarte: boolean; schichten: boolean; relief: 'aus' | 'einfach' | 'mehrstufig'; daemmerung: 'v04' | 'soft' | 'off'; rand: 'v04' | 'soft' | 'off';
 }
 
 export function renderVarianten(p: Preset, S: typeof Einstellungen): RenderVarianten {
@@ -30,12 +30,16 @@ export function renderVarianten(p: Preset, S: typeof Einstellungen): RenderVaria
     ringe: !!p.rings && p.rings.opacity > 0,
     ansichten: S.view !== 0,
     durchsichtig: S.transparent,
-    tiefe: S.depthOn,
-    parallaxe: S.pomOn,
+    // Mit dem Argh-Volumen ersetzt die Volumen-Haut die glatte Oberfläche: Relief, Tiefe, Parallaxe, Dämmerung und Randschimmer wirken auf
+    // diese Oberfläche und haben dann keine Wirkung. Sie sind dann ausgehängt (nicht mitkompiliert) und im Menü ausgeblendet.
+    tiefe: S.depthOn && !S.arghOn,
+    parallaxe: S.pomOn && !S.arghOn,
     argh: S.arghOn,
-    relief: S.relief > 0 ? (S.reliefMulti && S.reliefCoarse > 0 ? 'mehrstufig' : 'einfach') : 'aus',
-    daemmerung: S.twilight as RenderVarianten['daemmerung'],
-    rand: S.rimGlow as RenderVarianten['rand'],
+    arghKarte: S.arghOn && S.arghSource === 'karte',
+    schichten: S.arghOn && S.arghAbtast === 'verschachtelt' && S.view === 0,   // Zwischenschicht + 3×3-Auflösung statt Direktzeichnen
+    relief: S.arghOn ? 'aus' : S.relief > 0 ? (S.reliefMulti && S.reliefCoarse > 0 ? 'mehrstufig' : 'einfach') : 'aus',
+    daemmerung: (S.arghOn ? 'off' : S.twilight) as RenderVarianten['daemmerung'],
+    rand: (S.arghOn ? 'off' : S.rimGlow) as RenderVarianten['rand'],
   };
 }
 
@@ -49,7 +53,7 @@ export function renderCode(v: RenderVarianten): string {
   c += v.karte ? KARTE : KARTE_AUS;
   c += v.saum ? ATMOSAUM : ATMOSAUM_AUS;
   c += v.ringe ? RINGE : RINGE_AUS;
-  c += v.argh ? ARGH : ARGH_AUS;   // nach den Ringen: nutzt hook_ringschatten
+  c += v.argh ? (v.arghKarte ? ARGH_FARBE_KARTE : ARGH_FARBE_DYE) + ARGH + (v.schichten ? ARGH_SCHICHT : ARGH_PIXEL) : ARGH_AUS;   // nach den Ringen: nutzt hook_ringschatten
   if (v.tiefe || v.parallaxe) c += TIEFE_FUNK;
   c += v.tiefe ? TIEFE : TIEFE_AUS;
   c += v.parallaxe ? PARALLAXE : PARALLAXE_AUS;

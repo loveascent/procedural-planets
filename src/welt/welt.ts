@@ -136,6 +136,7 @@ export async function startWelt() {
     const st = QUALITAET[String(E.qualitaet)] ?? QUALITAET.mittel;
     gasE.setzeQualitaet(st.gas); felsE.setzeQualitaet(st.fels);
     gasE.setzeEinstellungen(s.gas ?? {}, s.gasTyp ?? {}); felsE.setzeEinstellungen(s.fels ?? {}, s.felsTyp ?? {});
+    gasSichtbar();
     spuren.leeren(); blitze.zuruecksetzen(); zeitRestZuruecksetzen(); tex.leeren();
     auswahl = null;
     setzeFokus(s.kamera?.fokus ?? null);
@@ -217,11 +218,18 @@ export async function startWelt() {
       panel.refresh();
     } else if (key === 'tempoLog') tempo = Math.pow(10, Number(E.tempoLog));
     else if (key === 'pause') pause = !!E.pause;
-    else if (key.startsWith('g_')) gasE.setzeTyp(key.slice(2), !!E[key]);
+    else if (key.startsWith('g_')) { gasE.setzeTyp(key.slice(2), !!E[key]); gasSichtbar(); }
     else if (key.startsWith('f_')) felsE.setzeTyp(key.slice(2), !!E[key]);
     else if (BAUSTEINE.some((b) => b.schluessel === key)) setzeSchalter(key, !!E[key]);
   };
   const panel = baueOberflaeche(ste, E, standard, wirkt);
+  // Mit dem Argh-Volumen sind die Module der glatten Oberfläche ausgehängt (Schalter ausgeblendet); der Argh-Quellschalter erscheint nur dann
+  function gasSichtbar() {
+    const argh = !!E.g_arghOn;
+    for (const k of ['relief', 'depthOn', 'pomOn', 'twilight', 'rimGlow']) panel.visible('g_' + k, !argh);
+    panel.visible('g_arghSource', argh);
+  }
+  gasSichtbar();
   wirkt('qualitaet');   // Startstufe auf Auflösung und Schwellen anwenden
 
   // ---------- Eingabe ----------

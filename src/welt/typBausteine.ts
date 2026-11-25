@@ -30,6 +30,8 @@ export const GAS_BAUSTEINE: TypBaustein[] = [
   { schluessel: 'pomOn', name: 'Parallaxe mit Eigenschatten', text: 'Wolken werfen Schatten und verschieben sich mit dem Blickwinkel.', aus: false, an: true, standardAn: false },
   { schluessel: 'twilight', name: 'Dämmerung', text: 'Weicher Übergang an der Tag-Nacht-Grenze.', aus: 'off', an: 'soft', standardAn: false },
   { schluessel: 'rimGlow', name: 'Randschimmer', text: 'Leuchten am Planetenrand.', aus: 'off', an: 'v04', standardAn: true },
+  { schluessel: 'arghOn', name: 'Argh-Volumen (flauschige 3D-Haut)', text: 'Ersetzt die glatte Oberfläche durch eine weiche Volumen-Haut (Verfahren aus Arghanions Blender-Tutorial), in Echtzeit, ohne Aufsummieren über viele Bilder. Dann sind Relief, Tiefe, Parallaxe, Dämmerung und Randschimmer ausgehängt.', aus: false, an: true, standardAn: false },
+  { schluessel: 'arghSource', name: 'Argh: scharfe Karte über Wind', text: 'Farbe und Form kommen aus einer festen scharfen Referenzkarte, die der Wind der Strömungsphysik verwirbelt (Foto oder Partikel-Lauf desselben Planeten). Aus: der live simulierte Farbstoff (weicher, weniger Detail). Wirkt nur mit Argh-Volumen.', aus: 'dye', an: 'karte', standardAn: true },
 ];
 
 export const FELS_BAUSTEINE: TypBaustein[] = [

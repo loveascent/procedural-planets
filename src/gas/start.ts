@@ -13,6 +13,8 @@ declare global {
       filmstrip: (o?: FilmOptions) => Promise<Filmstrip>;
       selftest: () => Promise<{ edge: number; interior: number; seamless: boolean }>;
       frame: () => number;
+      /** Test: nach dem Setzen eines Reglers in `settings` dessen Reaktion auslösen (wie das Menü) */
+      onChange: (key: keyof typeof S) => void;
     };
   }
 }
@@ -41,12 +43,16 @@ async function start() {
     console.error((e as GPUUncapturedErrorEvent).error.message);
     fail(`<b>GPU-Fehler:</b> ${(e as GPUUncapturedErrorEvent).error.message}`);
   });
+  // Direktlink: ?argh=1 startet mit eingeschaltetem Argh-Volumen, ?argh=0 mit ausgeschaltetem (Standard: aus)
+  const arghLink = new URLSearchParams(location.search).get('argh');
+  if (arghLink === '1' || arghLink === '0') S.arghOn = arghLink === '1';
   const app = new App(device);
   const code = new URLSearchParams(location.search).get('code');
   if (code) { try { app.restore(app.decode(code)); } catch (e) { console.warn('Planeten-Code aus der Adresse nicht lesbar', e); } }
   window.gasPlanet = {
     settings: S, capture: () => app.capture(), readRow: (w, f, y) => app.readRow(w, f, y),
     filmstrip: (o) => app.filmstrip(o), selftest: () => app.selftest(), frame: () => app.frameCount(),
+    onChange: (k) => app.onChange(k),
   };
   document.getElementById('lang')?.addEventListener('click', () => app.toggleLang());
   window.addEventListener('keydown', (e) => {

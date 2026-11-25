@@ -13,6 +13,7 @@ band, coastline and debris cloud comes from equations and numbers.
 **▶ Play it now (no install):**
 [Solar system](https://loveascent.github.io/procedural-planets/index.html?body=welt) ·
 [Gas giant](https://loveascent.github.io/procedural-planets/index.html) ·
+[Gas giant, fluffy Argh volume](https://loveascent.github.io/procedural-planets/index.html?argh=1) ·
 [Rocky planet](https://loveascent.github.io/procedural-planets/index.html?body=rocky) ·
 [Moon](https://loveascent.github.io/procedural-planets/index.html?body=moon) ·
 [Cream in coffee](https://loveascent.github.io/procedural-planets/coffee.html) ·
@@ -93,12 +94,77 @@ with many solar systems is planned and shown greyed out in the header.
   hybrid run as separate tracks instead of one mixed method.
 - **Fixed time step:** the simulation advances in fixed steps independent of the frame rate, so a
   60 Hz laptop and a 240 Hz desktop show the same atmosphere, and time lapse keeps the physics.
-- **Argh volume (switch, off by default):** the cloud deck as a real density body after Arghanion's Blender
-  tutorial: the colour displaces a sphere (q = p ⊙ (1 − f + f·C)), a constant colour ramp gives a dense skin, single
-  scattering with a shadow ray to the sun. The colour C is the live dye of the simulation, so the volume swirls with the flow;
-  real bumpy silhouette and terminator. Standalone photo version: [gasriese-volumen-demo](https://github.com/loveascent/gasriese-volumen-demo).
+- **Argh volume (switch, off by default):** the cloud deck as a real, fluffy density body after Arghanion's Blender
+  tutorial, with a sharp map carried along by the simulated wind. See [Argh volume](#argh-volume-a-fluffy-volumetric-gas-giant) below.
 - **Rendering:** oblate ellipsoid, Minnaert limb darkening, cloud relief with parallax self-shadow,
   haze rim, rings with shadows, ACES tone mapping.
+
+### Argh volume: a fluffy volumetric gas giant
+
+*(`src/gas/arghkarte.ts`, `src/gas/shader/argh_karte.ts`, `src/gas/shader/argh.ts`; switch “Argh volume (Arghanion)” in the Relief section, off by default)*
+
+The cloud deck is rendered as a real density body instead of a painted surface, after Arghanion's Blender tutorial
+(re-implemented from the node tree, no files used). The colour C displaces a sphere, `q = p ⊙ (1 − f + f·C)`, a constant
+colour ramp turns it into a dense skin, and single scattering with a shadow ray towards the sun lights it. The result has a
+bumpy silhouette and terminator and a soft, woolly skin.
+
+| Jupiter, whole planet | Jupiter, close up (no photo) | Close up with a 4096 × 2048 photo map |
+|---|---|---|
+| ![Jupiter as a fluffy volume](docs/images/argh-jupiter.png) | ![Close view of the fluffy cloud skin](docs/images/argh-jupiter-nah.png) | ![Close view with a photo map carried by the wind](docs/images/argh-jupiter-foto.png) |
+
+| Saturn | Neptune |
+|---|---|
+| ![Saturn with rings and a woolly cloud skin](docs/images/argh-saturn.png) | ![Neptune with the volume skin](docs/images/argh-neptun.png) |
+
+*Renders of this project (Chrome on an RTX 5080, 1280 × 720 window, pixel density 2). Photo map in the third picture:
+Jupiter 4096 × 2048 from [Solar System Scope](https://www.solarsystemscope.com/textures/) (CC BY 4.0). The fps counter in the pictures
+is the live value of a headless run and is not the measurement below.*
+
+**How the fluff is made (and what we measured):**
+
+- **Map over wind (default colour source):** a sharp reference map is advected by the simulated wind (Neyret 2003, *Advected
+  Textures*): the texture *coordinates* are carried along, not the texture, so the map stays sharp instead of blurring. The
+  coordinates are stored as a deviation from the identity (an absolute direction in `rgba16f` shows stair steps up close), and
+  relax back to the identity (`arghRelax`). Without a photo the map starts from the planet's own colour plus cloud detail, immediately,
+  with no warm-up run. With a photo it needs at least 4096 × 2048 (2:1); a small or non-2:1 image only gives lumps.
+- **Soft skin:** `K` scatter points per pixel (default 10, 3 on phones) with a nearly hard density ramp (0.1 free path lengths at the skin edge,
+  like the “Constant” colour ramp of the tutorial), an unsmoothed height (mip level 0), and a thin haze shell (6 %) reaching down to the skin, so no dark band appears under the haze.
+  The night side is skipped exactly.
+- **Sampling of the scatter points (control “Argh: scatter point sampling”)** — three variants, all kept:
+  `fest` (one fixed pattern, can show steps), `verschachtelt` (**default**: each pixel of a 3 × 3 tile takes a different fixed offset,
+  and a 3 × 3 resolve averages the nine; nine times the samples of the scatter points alone, no noise; interleaved sampling,
+  Keller & Heidrich 2001) and `zufall` (random per pixel, like the Blender demo: very fluffy but grainy).
+
+| fixed | interleaved (default) | random |
+|---|---|---|
+| ![Fixed offsets](docs/images/argh-abtast-fest.png) | ![Interleaved 3 x 3](docs/images/argh-abtast-verschachtelt.png) | ![Random offsets: grain](docs/images/argh-abtast-zufall.png) |
+
+Measured on the RTX 5080 (Chrome headless, Jupiter, pixel density 2, canvas 1880 × 1440, requestAnimationFrame count over 5 s, vsync off),
+**median of three runs** (the GPU was shared with other jobs, single runs varied by a factor of two to four; the spread is shown):
+
+| Configuration | median ms per frame (spread) | ≈ fps |
+|---|---:|---:|
+| Argh off | 0.14 (0.13–0.16) | 7000 |
+| Photo map, interleaved, K = 10 (default) | 4.1 (4.0–4.8) | 243 |
+| Photo map, interleaved, K = 3, shadow 4 (phone setting) | 2.1 (1.6–3.3) | 486 |
+| Photo map, fixed, K = 10 | 3.1 (2.6–4.3) | 326 |
+| Photo map, random, K = 10 | 3.0 (2.9–5.0) | 337 |
+| No photo (detail map), interleaved, K = 10 | 3.6 (3.2–4.2) | 281 |
+| Live dye as colour source (“B”), interleaved, K = 10 | 1.6 (1.5–7.3) | 623 |
+
+High-frequency energy of a 300 × 300 crop in the close view with a photo map (Laplacian / brightness; lower = smoother, higher = grainier):
+interleaved 0.085, fixed 0.172, random 0.388.
+In the solar system with the module on and a gas giant in focus (65 bodies): 239.5 fps with, 239.6 fps without (the counter caps at 240).
+
+**Defaults, and how they were found:** the first defaults (f = 0.12, soft ramp 0.3, height smoothing 0.25) washed the fluff out. Side by side with the
+standalone reference at the same view and lighting, the reference values of the tutorial (f = 0.211, hard “Constant” ramp) brought the woolly, fur-like skin
+back, also without a photo and also after 60 s of simulated flow. The defaults are now f = 0.211, ramp 0.1, smoothing 0.
+
+**Honest limits:** the phone value is measured only on the RTX 5080 (K = 3), not on a phone. Without a photo the map has less fine filigree
+than a photo. Displacement `f = 0` gives a smooth sphere by the formula above (no fluff at all); the default is 0.211 and “reset controls”
+restores it. The ragged outline, also on the dark side, is the real displaced density body (without Argh the edge is smooth), not an artifact. Everything here is one switch (`arghOn`) and one set of controls; nothing of the older methods was removed.
+
+Tools: [werkzeug/gas/argh-messen/](werkzeug/gas/argh-messen/LIES.txt) (`fps.py`, `mess2.py`, `metrik.py`, `bilder_readme.py`). Standalone photo version: [gasriese-volumen-demo](https://github.com/loveascent/gasriese-volumen-demo).
 
 ### Rocky planets: terrain, water and air from a seed (`src/rocky/`, `src/sky/`)
 - **Terrain:** per-face height and moisture maps on a cube sphere from fBm and ridged simplex noise

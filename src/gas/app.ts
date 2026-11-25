@@ -25,6 +25,7 @@ import { flowMode, lookMode, dir } from './modi';
 import { applyQuality, calibrate, adaptScale, resize } from './qualitaet';
 import { cubeField, allocVel, memoryNote, allocDye, allocParticles } from './felder';
 import { buildPipes, buildRenderPipe, module } from './pipelines';
+import { allocKarte, fuelleKarte, ladeFoto } from './arghkarte';
 import { snapshot, remember, undo, redo, updateUndoButtons, restore, encode, decode, loadSaves, storeSaves, buildSaveSection } from './verlauf';
 
 // ---------------------------------------------------------------------------
@@ -60,6 +61,11 @@ export class App {
   pipes: Record<string, GPUComputePipeline> = {};
   pipesBuilt: string | null = null;
   renderPipe!: GPURenderPipeline;
+  /** verschachteltes Abtasten (Argh): Pipeline der Schicht, Schicht-Texturen (Größe des Bildes) und 1×1-Platzhalter */
+  renderPipeA: GPURenderPipeline | null = null;
+  schichtA: GPUTexture | null = null;
+  schichtB: GPUTexture | null = null;
+  schichtLeer: GPUTexture;
   renderPipeLayout: GPUPipelineLayout;
   renderKey: string | null = null;
   sky!: Sky;
@@ -69,6 +75,16 @@ export class App {
   aux!: CubeField;
   div!: CubeField;
   dye: CubeField[] = [];
+  /** Baustein „Argh-Karte“ (nur belegt, wenn an): Rückabbildung (2 Puffer), Referenzkarte, optional geladenes Foto */
+  warp: CubeField[] = [];
+  wc = 0;
+  ref: CubeField | null = null;
+  refNeu = false;
+  arghQ = 1;      // automatischer Qualitätsfaktor des Volumens (1 = voll), sinkt bei zu wenig fps
+  refMarke = 0;   // zählt Aufträge „Referenz aus Partikeln“, damit ein veralteter nichts mehr überschreibt
+  warpNeu = false;
+  foto: GPUTexture | null = null;
+  fotoInfo = '';
   flow!: CubeField;
   dummy: CubeField;
   parts!: GPUBuffer;
@@ -90,7 +106,7 @@ export class App {
   // Vorrechnen: Schritte pro Auftrag, so bemessen, dass ein Auftrag ~40 ms GPU-Zeit braucht.
   warmRate = 4;
   warmTotal = WARM_STEPS;
-  stepMs = 0;          // gemessene GPU-Zeit pro Simulationsschritt
+  stepMs = 2;          // geschätzte Zeit pro Simulationsschritt (ms); ohne Vorlauf aus der Bildzeit nachgeführt (frameOnce)
   warmStart = 0;
   manualSkip = false;  // Vorspulen per Knopf: volle Länge, keine Begrenzung der Ladezeit
   calibrated = false;
@@ -111,7 +127,8 @@ export class App {
       this.ctx.configure({ device, format: this.format, alphaMode: 'opaque' });
     }
     // clamp-to-edge: im Flächeninneren wird nie über den Rand hinaus gefiltert (das übernimmt sampleCube).
-    this.sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
+    this.schichtLeer = device.createTexture({ size: [1, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING });
+    this.sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
     this.simBuf = device.createBuffer({ size: SIM_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.renderBuf = device.createBuffer({ size: RENDER_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
@@ -140,6 +157,10 @@ export class App {
         { binding: 4, visibility: F, texture: { sampleType: 'float', viewDimension: 'cube' } },
         { binding: 5, visibility: F, texture: { sampleType: 'float', viewDimension: 'cube' } },
         { binding: 6, visibility: F, texture: { sampleType: 'float', viewDimension: '2d-array' } },
+        { binding: 7, visibility: F, texture: { sampleType: 'float', viewDimension: 'cube' } },   // Baustein Argh-Karte: Referenzkarte
+        { binding: 8, visibility: F, texture: { sampleType: 'float', viewDimension: 'cube' } },   // Baustein Argh-Karte: Rückabbildung
+        { binding: 9, visibility: F, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },    // Argh-Schicht A (Streulicht, Transmission)
+        { binding: 10, visibility: F, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },   // Argh-Schicht B (Zustand, Trefferweite)
       ],
     })] });
     this.sky = new Sky(device, kopflos ? 16 : isPhone ? 512 : 1024);
@@ -171,6 +192,10 @@ export class App {
   memoryNote() { return memoryNote(this); }
 
   allocDye() { return allocDye(this); }
+
+  allocKarte() { return allocKarte(this); }
+  fuelleKarte() { return fuelleKarte(this); }
+  ladeFoto(datei: Blob) { return ladeFoto(this, datei); }
 
   allocParticles() { return allocParticles(this); }
 

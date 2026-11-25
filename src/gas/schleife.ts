@@ -39,6 +39,7 @@ export function initIfNeeded(app: App) {
   app.writeSim(0, true);
   app.initFields(init, app.needsInit);
   app.device.queue.submit([init.finish()]);
+  app.fuelleKarte();   // Baustein Argh-Karte: Referenz und Abbildung neu füllen (aus: nichts)
   // Neue Farbe braucht etwas Zeit, bis die Strömung sie verwirbelt hat.
   app.warm = app.needsInit ? app.warmSteps : Math.max(app.warm, Math.min(300, app.warmSteps));
   app.warmTotal = app.warm;
@@ -47,8 +48,10 @@ export function initIfNeeded(app: App) {
   const fresh = app.needsInit;
   app.needsInit = false;
   app.needsDye = false;
-  showLoading(true);
   app.restored = false;
+  // Kein Vorlauf (WARM_STEPS = 0): kein Ladebild, die Wolken laufen sofort; Vorspulen nur auf Knopfdruck (skip)
+  if (app.warm > 0) showLoading(true);
+  else { showLoading(false); app.faceMainStorm(); }
   if (fresh && app.S.remember) void app.loadState();
 }
 

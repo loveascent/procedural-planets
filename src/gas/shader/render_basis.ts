@@ -19,6 +19,8 @@ struct R {
   p6: vec4f,        // x Parallaxe an/aus, y Höhe, z Eigenschatten, w Größe (Mehrstufig)
   p7: vec4f,        // x Dämmerung (0 wie v0.4, 1 aus, 2 weich), y Randschimmer (0 wie v0.4, 1 weich, 2 aus)
   p8: vec4f,        // Argh-Volumen: x an/aus, y Mix-Faktor f, z Dichte σ (je Planetenradius), w Anisotropie g
+  p9: vec4f,        // Argh-Volumen: x Streupunkte der weichen Haut (0 = harte Haut), y Schattenschritte, z Glättung der Höhe (Mip-Stufe), w Breite der Randrampe (Planetenradien)
+  p10: vec4f,       // Argh-Volumen: x Zufall der Streupunkte (1) oder fest/verschachtelt (0)
 };
 
 @group(0) @binding(0) var<uniform> U: R;
@@ -100,15 +102,17 @@ fn fs(vin: VOut) -> @location(0) vec4f {
   var col = hook_himmel(dir);
   var tPlanet = hitPlanet(o, d);
   // Baustein „Argh-Volumen“ (aus: nichts ändert sich): Haut eines Dichtefelds statt glatter Oberfläche, Silhouette buckelig
-  let argh = hook_argh(o, d, sun, c, tPlanet, mode);
+  let argh = hook_argh_pixel(o, d, sun, c, tPlanet, mode, vin.pos.xy);
+  let dunst = hook_argh_dunst(o, d, sun, c, select(-1.0, argh.t, argh.an == 1), mode);   // Dunstschale statt Leuchtsaum (nur mit Argh), bis zur Haut
+  let arghAn = U.p8.x > 0.5 && mode == 0;
   if (argh.an == 2) { tPlanet = -1.0; }
   if (argh.an == 1) { tPlanet = argh.t; }
 
   // Atmosphärensaum außerhalb der Planetenscheibe.
-  if (tPlanet < 0.0) {
-    col = hook_saum_aussen(col, o, d, sun, c);
-  } else if (argh.an == 1) {
-    col = argh.farbe;
+  if (argh.an == 1) {
+    col = dunst.xyz + dunst.w * (argh.farbe + argh.T * col);   // weiche Haut: Rest scheint durch (Himmel), davor die Dunstschale
+  } else if (tPlanet < 0.0) {
+    col = select(hook_saum_aussen(col, o, d, sun, c), dunst.xyz + dunst.w * col, arghAn);
   } else {
     let hp = o + d * tPlanet;
     let hs = hp * vec3f(1.0, 1.0 / c, 1.0);

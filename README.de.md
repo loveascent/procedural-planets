@@ -13,6 +13,7 @@ keine: Jedes Wolkenband, jede Küste und jede Trümmerwolke kommt aus Gleichunge
 **▶ Gleich ausprobieren (ohne Installation):**
 [Sonnensystem](https://loveascent.github.io/procedural-planets/index.html?body=welt) ·
 [Gasriese](https://loveascent.github.io/procedural-planets/index.html) ·
+[Gasriese, flauschiges Argh-Volumen](https://loveascent.github.io/procedural-planets/index.html?argh=1) ·
 [Gesteinsplanet](https://loveascent.github.io/procedural-planets/index.html?body=rocky) ·
 [Sahne im Kaffee](https://loveascent.github.io/procedural-planets/coffee.html) ·
 [alle Versionen seit v0.1](#versionen-vom-ersten-prototyp-bis-zum-sonnensystem)
@@ -93,10 +94,75 @@ Sonnensystemen ist geplant und im Kopf ausgegraut zu sehen.
   60-Hz-Laptop und ein 240-Hz-Rechner zeigen dieselbe Atmosphäre, und der Zeitraffer behält die Physik.
 - **Darstellung:** abgeplattetes Ellipsoid, Minnaert-Randverdunklung, Wolkenrelief mit
   Parallaxe-Eigenschatten, Dunstsaum, Ringe mit Schatten, ACES-Tonemapping.
-- **Argh-Volumen (Schalter, Standard aus):** die Wolkendecke als echter Dichtekörper nach Arghanions Blender-Tutorial: die Farbe
-  verschiebt eine Kugel (q = p ⊙ (1 − f + f·C)), eine konstante Farbrampe ergibt eine dichte Haut, Einfachstreuung mit Schattenstrahl
-  zur Sonne. Die Farbe C ist der live Farbstoff der Simulation, darum verwirbelt das Volumen mit der Strömung; echte buckelige Silhouette.
-  Fassung mit Foto: [gasriese-volumen-demo](https://github.com/loveascent/gasriese-volumen-demo).
+- **Argh-Volumen (Schalter, Standard aus):** die Wolkendecke als echter, flauschiger Dichtekörper nach Arghanions Blender-Tutorial,
+  mit einer scharfen Karte, die der simulierte Wind mitnimmt. Siehe [Argh-Volumen](#argh-volumen-ein-flauschiger-volumen-gasriese) unten.
+
+### Argh-Volumen: ein flauschiger Volumen-Gasriese
+
+*(`src/gas/arghkarte.ts`, `src/gas/shader/argh_karte.ts`, `src/gas/shader/argh.ts`; Schalter „Argh-Volumen (Arghanion)“ im Abschnitt Relief, Standard aus)*
+
+Die Wolkendecke wird als echter Dichtekörper gezeichnet statt als aufgemalte Fläche, nach Arghanions Blender-Tutorial
+(aus dem Knotenbaum neu gebaut, keine Dateien übernommen). Die Farbe C verschiebt eine Kugel, `q = p ⊙ (1 − f + f·C)`, eine konstante
+Farbrampe macht daraus eine dichte Haut, und Einfachstreuung mit Schattenstrahl zur Sonne beleuchtet sie. Ergebnis: buckelige
+Silhouette und Terminator und eine weiche, wollige Haut.
+
+| Jupiter, ganzer Planet | Jupiter, Nahansicht (ohne Foto) | Nahansicht mit Foto-Karte 4096 × 2048 |
+|---|---|---|
+| ![Jupiter als flauschiges Volumen](docs/images/argh-jupiter.png) | ![Nahansicht der flauschigen Wolkenhaut](docs/images/argh-jupiter-nah.png) | ![Nahansicht mit Foto-Karte, vom Wind getragen](docs/images/argh-jupiter-foto.png) |
+
+| Saturn | Neptun |
+|---|---|
+| ![Saturn mit Ringen und wolliger Wolkenhaut](docs/images/argh-saturn.png) | ![Neptun mit Volumen-Haut](docs/images/argh-neptun.png) |
+
+*Renderings dieses Projekts (Chrome auf einer RTX 5080, Fenster 1280 × 720, Pixeldichte 2). Foto-Karte im dritten Bild:
+Jupiter 4096 × 2048 von [Solar System Scope](https://www.solarsystemscope.com/textures/) (CC BY 4.0). Der fps-Zähler im Bild ist der Live-Wert
+eines headless-Laufs und nicht die Messung unten.*
+
+**Wie der Flausch entsteht (und was gemessen wurde):**
+
+- **Karte über Wind (Standard-Farbquelle):** Eine scharfe Referenzkarte wird vom simulierten Wind verschoben (Neyret 2003, *Advected
+  Textures*): getragen werden die Textur-*Koordinaten*, nicht die Textur, darum bleibt die Karte scharf statt zu verwischen. Die
+  Koordinaten werden als Abweichung von der Identität gespeichert (eine absolute Richtung in `rgba16f` zeigt in der Nahansicht Treppenstufen)
+  und fallen zur Identität zurück (`arghRelax`). Ohne Foto startet die Karte sofort aus der Anfangsfarbe des Planeten plus Wolkendetail,
+  ohne Vorlauf. Ein Foto braucht mindestens 4096 × 2048 (2:1); ein kleines oder nicht 2:1 großes Bild ergibt nur Klumpen.
+- **Weiche Haut:** `K` Streupunkte je Pixel (Standard 10, Handy 3) mit einer fast harten Dichterampe (0,1 freie Weglängen an der Hautkante,
+  wie die Farbrampe „Constant“ des Tutorials), ungeglätteter Höhe (Mip-Stufe 0) und einer dünnen Dunstschale (6 %) bis zur Haut, damit unter dem Dunst kein dunkles Band entsteht.
+  Die Nachtseite wird exakt übersprungen.
+- **Abtastung der Streupunkte (Regler „Argh: Abtastung der Streupunkte“)** — drei Auswahlen, alle bleiben erhalten:
+  `fest` (ein festes Muster, kann Stufen zeigen), `verschachtelt` (**Standard**: jeder Pixel einer 3 × 3-Kachel nimmt einen anderen festen Versatz,
+  eine 3 × 3-Auflösung mittelt die neun; neunfache Abtastung der Streupunkte allein, ohne Rauschen; Verschachteltes Abtasten,
+  Keller & Heidrich 2001) und `zufall` (je Pixel gewürfelt wie im Blender-Demo: sehr flauschig, aber körnig).
+
+| fest | verschachtelt (Standard) | Zufall |
+|---|---|---|
+| ![Fester Versatz](docs/images/argh-abtast-fest.png) | ![Verschachtelt 3 x 3](docs/images/argh-abtast-verschachtelt.png) | ![Zufälliger Versatz: Körnung](docs/images/argh-abtast-zufall.png) |
+
+Gemessen auf der RTX 5080 (Chrome headless, Jupiter, Pixeldichte 2, Canvas 1880 × 1440, requestAnimationFrame-Zählung über 5 s, vsync aus),
+**Median aus drei Läufen** (die GPU wurde mit anderen Aufgaben geteilt, einzelne Läufe schwankten um den Faktor zwei bis vier; die Spanne steht dabei):
+
+| Konfiguration | Median ms je Bild (Spanne) | ≈ fps |
+|---|---:|---:|
+| Argh aus | 0,14 (0,13–0,16) | 7000 |
+| Foto-Karte, verschachtelt, K = 10 (Standard) | 4,1 (4,0–4,8) | 243 |
+| Foto-Karte, verschachtelt, K = 3, Schatten 4 (Handy-Einstellung) | 2,1 (1,6–3,3) | 486 |
+| Foto-Karte, fest, K = 10 | 3,1 (2,6–4,3) | 326 |
+| Foto-Karte, Zufall, K = 10 | 3,0 (2,9–5,0) | 337 |
+| Ohne Foto (Detailkarte), verschachtelt, K = 10 | 3,6 (3,2–4,2) | 281 |
+| Live-Farbstoff als Farbquelle („B“), verschachtelt, K = 10 | 1,6 (1,5–7,3) | 623 |
+
+Hochfrequenz-Energie eines 300 × 300-Ausschnitts in der Nahansicht mit Foto-Karte (Laplace / Helligkeit; kleiner = glatter, größer = körniger):
+verschachtelt 0,085, fest 0,172, Zufall 0,388.
+Im Sonnensystem mit eingeschaltetem Baustein und einem Gasriesen im Fokus (65 Körper): 239,5 fps mit, 239,6 fps ohne (der Zähler endet bei 240).
+
+**Standardwerte und wie sie gefunden wurden:** Die ersten Standardwerte (f = 0,12, weiche Rampe 0,3, Höhenglättung 0,25) haben den Flausch ausgewaschen. Im Vergleich mit der
+Standalone-Referenz bei gleicher Ansicht und Beleuchtung brachten die Werte des Tutorials (f = 0,211, harte Rampe „Constant“) die wollige, felle-artige Haut zurück,
+auch ohne Foto und auch nach 60 s simulierter Strömung. Die Standardwerte sind jetzt f = 0,211, Rampe 0,1, Glättung 0.
+
+**Ehrliche Grenzen:** Der Handy-Wert ist nur auf der RTX 5080 gemessen (K = 3), nicht auf einem Handy. Ohne Foto hat die Karte weniger feines Filigran
+als mit Foto. Verschiebung `f = 0` ergibt nach der Formel oben eine glatte Kugel (gar kein Flausch); der Standard ist 0,211, „Regler zurücksetzen“
+stellt ihn wieder her. Der zerklüftete Rand, auch auf der dunklen Seite, ist der echte verschobene Dichtekörper (ohne Argh ist der Rand glatt), kein Fehler. Alles hier ist ein Schalter (`arghOn`) und ein Satz Regler; von den älteren Verfahren wurde nichts entfernt.
+
+Werkzeuge: [werkzeug/gas/argh-messen/](werkzeug/gas/argh-messen/LIES.txt) (`fps.py`, `mess2.py`, `metrik.py`, `bilder_readme.py`). Fassung mit Foto: [gasriese-volumen-demo](https://github.com/loveascent/gasriese-volumen-demo).
 
 ### Gesteinsplaneten: Gelände, Wasser und Luft aus einem Seed (`src/rocky/`, `src/sky/`)
 - **Gelände:** Höhen- und Feuchtekarten je Würfelseite aus fBm- und Ridged-Simplex-Rauschen (Verfahren

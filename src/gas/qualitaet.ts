@@ -40,6 +40,11 @@ export function adaptScale(a: App, real: number) {
   if (a.scaleAcc < 1) return;
   const fps = a.scaleFrames / a.scaleAcc;
   a.scaleAcc = 0; a.scaleFrames = 0;
+  // Argh-Volumen: reicht die verkleinerte Bildgröße nicht, werden Streupunkte und Schattenschritte weniger; bei viel Reserve wieder mehr
+  if (a.S.arghOn) {
+    if (fps < 56 && a.renderScale <= 0.7) a.arghQ = Math.max(0.3, a.arghQ - 0.15);
+    else if (fps > 110 && a.arghQ < 1) a.arghQ = Math.min(1, a.arghQ + 0.05);
+  } else a.arghQ = 1;
   if (fps < 56) { a.renderScale = Math.max(0.5, a.renderScale - 0.1); a.goodSeconds = 0; }
   else if (++a.goodSeconds >= 3 && a.renderScale < 1) { a.renderScale = Math.min(1, a.renderScale + 0.05); a.goodSeconds = 0; }
 }

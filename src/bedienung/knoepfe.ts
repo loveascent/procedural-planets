@@ -32,6 +32,7 @@ export function file(app: Panel, id: string, label: string, hint: string, onFile
   input.className = 'file';
   lab.htmlFor = input.id;
   row.classList.add('row-file');
+  row.dataset.key = id;
   row.append(input);
   input.addEventListener('change', () => { if (input.files?.[0]) onFile(input.files[0]); input.value = ''; });
   return app;

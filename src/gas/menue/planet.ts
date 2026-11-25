@@ -2,7 +2,7 @@
 import type { Panel } from '../../ui';
 import type { MenueKontext } from './kontext';
 import { fail } from '../dom';
-import { presets, bandsFromImage } from '../../presets';
+import { presets, bandsFromImage, newSeed } from '../../presets';
 import { t } from '../../i18n';
 
 export function abschnittPlanet(p: Panel, k: MenueKontext): Panel {
@@ -24,7 +24,9 @@ export function abschnittPlanet(p: Panel, k: MenueKontext): Panel {
       }).catch(() => fail(t('<b>Das Bild ließ sich nicht lesen.</b> Nimm ein JPG, PNG oder WebP.', '<b>Could not read the image.</b> Use a JPG, PNG or WebP.'))))
     .buttons([
       ['btn-defaults', t('Regler zurücksetzen', 'Reset controls'), () => app.resetSettings()],
+      ['btn-seed-planet', t('🎲 Neuer Zufallsplanet', '🎲 New random planet'), () => { app.S.preset = 'Zufall'; app.S.seed = newSeed(); app.applyPreset(); app.panel.refresh(); app.remember(); }],
     ], {
+      'btn-seed-planet': t('Würfelt einen neuen Planeten (Optionen unter „Zufallsplanet“).', 'Rolls a new planet (options under “Random planet”).'),
       'btn-defaults': t('Alle Regler auf die Standardwerte, Planet und Gerät bleiben.', 'All controls back to defaults; planet and device stay.'),
     });
 }
