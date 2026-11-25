@@ -43,6 +43,9 @@ async function start() {
     console.error((e as GPUUncapturedErrorEvent).error.message);
     fail(`<b>GPU-Fehler:</b> ${(e as GPUUncapturedErrorEvent).error.message}`);
   });
+  // Direktlink: ?argh=1 startet mit eingeschaltetem Argh-Volumen, ?argh=0 mit ausgeschaltetem (Standard: aus)
+  const arghLink = new URLSearchParams(location.search).get('argh');
+  if (arghLink === '1' || arghLink === '0') S.arghOn = arghLink === '1';
   const app = new App(device);
   const code = new URLSearchParams(location.search).get('code');
   if (code) { try { app.restore(app.decode(code)); } catch (e) { console.warn('Planeten-Code aus der Adresse nicht lesbar', e); } }

@@ -2,15 +2,15 @@
 import sys, json
 from playwright.sync_api import sync_playwright
 FOTO = "/e/Claude/gasriese-volumen-demo/karten/jupiter_4k_solarsystemscope.jpg".replace("/e/", "E:/")
-BASE = {"arghMix":0.211,"arghDensity":30,"arghAniso":0.22,"arghRelax":0.05,"sunAngle":65,"exposure":1.4,"pixelDensity":2,"autoQuality":False}
+BASE = {"arghMix":0.211,"arghEdge":0.1,"arghSmooth":0,"arghDensity":30,"arghAniso":0.22,"arghRelax":0.05,"sunAngle":65,"exposure":1.4,"pixelDensity":2,"autoQuality":False}
 CONF = [
- ("aus (ohne Argh)",              {}, False),
- ("B hart  (Farbstoff, K=0)",     {"arghOn":True,"arghSource":"dye","arghSoft":0}, False),
- ("B weich (Farbstoff, K=8)",     {"arghOn":True,"arghSource":"dye","arghSoft":8}, False),
- ("A hart  (Foto, K=0)",          {"arghOn":True,"arghSource":"karte","arghSoft":0}, True),
- ("A weich (Foto, K=4)",          {"arghOn":True,"arghSource":"karte","arghSoft":4}, True),
- ("A weich (Foto, K=8)",          {"arghOn":True,"arghSource":"karte","arghSoft":8}, True),
- ("A weich (Foto, K=8, Schatten 8)", {"arghOn":True,"arghSource":"karte","arghSoft":8,"arghShadow":8}, True),
+ ("aus (ohne Argh)",                          {}, False),
+ ("A Foto, verschachtelt K=10 (Standard)",    {"arghOn":True,"arghSource":"karte","arghAbtast":"verschachtelt","arghSoft":10}, True),
+ ("A Foto, verschachtelt K=3 (Handy-Wert)",   {"arghOn":True,"arghSource":"karte","arghAbtast":"verschachtelt","arghSoft":3,"arghShadow":4}, True),
+ ("A Foto, fest K=10",                        {"arghOn":True,"arghSource":"karte","arghAbtast":"fest","arghSoft":10}, True),
+ ("A Foto, Zufall K=10",                      {"arghOn":True,"arghSource":"karte","arghAbtast":"zufall","arghSoft":10}, True),
+ ("A ohne Foto (Detail), verschachtelt K=10", {"arghOn":True,"arghSource":"karte","arghAbtast":"verschachtelt","arghSoft":10}, False),
+ ("B Farbstoff, verschachtelt K=10",          {"arghOn":True,"arghSource":"dye","arghAbtast":"verschachtelt","arghSoft":10}, False),
 ]
 ARGS = ["--enable-unsafe-webgpu","--force_high_performance_gpu","--ignore-gpu-blocklist","--mute-audio","--disable-frame-rate-limit","--disable-gpu-vsync"]
 JS = """()=>new Promise(r=>{let n=0,t0=performance.now();const f=()=>{n++; if(performance.now()-t0<5000) requestAnimationFrame(f); else r([n,(performance.now()-t0)]);};requestAnimationFrame(f);})"""

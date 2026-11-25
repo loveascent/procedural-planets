@@ -46,6 +46,9 @@ implementation is original. Thanks to the authors:
 | Marcel Minnaert, 1941 | limb darkening |
 | Krzysztof Narkowicz, *ACES Filmic Tone Mapping Curve* (2016) | tone mapping |
 | Arghanion's Puzzlebox, [*Create an Epic Volumetric Gas Giant!*](https://www.youtube.com/watch?v=CrAn6j8S1gg) (Blender tutorial, after Rui Huang) | “Argh volume” module: colour-displaced spherical density, constant colour ramp, principled volume; re-implemented from the node tree, no files used |
+| Fabrice Neyret, [*Advected Textures*](https://diglib.eg.org/items/c4bf80cc-23f0-4107-958d-e03c0b9c8ac4/full) (SCA 2003) | “Argh map” module: advect the texture parametrisation instead of the texture, so the map stays sharp; the relaxation to identity is our own variant |
+| Alexander Keller, Wolfgang Heidrich, *Interleaved Sampling*, Eurographics Workshop on Rendering 2001 | “Argh volume”: interleaved sampling (3 × 3 tile of fixed offsets, 3 × 3 resolve) instead of random grain |
+| Solar System Scope, [texture pack](https://www.solarsystemscope.com/textures/) (CC BY 4.0) | Jupiter 4096 × 2048 map used for the photo pictures of the “Argh volume” (not shipped in the app) |
 | Max & Becker 1995; Perlin & Neyret 2001; Neyret 2003 | advected textures / flow noise (ROADMAP 1a; two-phase trick used for the clouds in `src/rocky/main.js`) |
 | Showman 2007; Scott & Polvani 2007 | forced shallow-water turbulence: storms as mass pulses, jets and vortices emerge (ROADMAP 1c, see [docs/RESEARCH.md](docs/RESEARCH.md)) |
 

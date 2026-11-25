@@ -83,12 +83,12 @@ export const S = {
   pomHeight: 1,
   pomShadow: 1,
   arghOn: false,          // Argh-Volumen (Arghanion): Haut eines Dichtefelds aus dem live Farbstoff
-  arghMix: 0.12,          // Mix-Faktor f (Video: 0,054; mit scharfer Karte gemessen: 0,12 zeigt deutlich Relief ohne Klumpen, 0,2 für Fotos)
+  arghMix: 0.211,         // Mix-Faktor f (Endstand des Tutorials/Referenz-Demo: 0,211; gemessen 25.11.: bei 0,12 wäscht die weiche Haut den Flausch aus)
   arghDensity: 30,        // Dichte σ je Planetenradius (Video-Referenz des Auftraggebers: 0,3 je Blender-Einheit bei Würfelkante 100 → 30)
   arghAniso: 0,           // Anisotropie g (Principled Volume, Video: 0)
   arghAbtast: 'verschachtelt', // Versatz der Streupunkte: 'fest' (ein Raster, kann Stufen zeigen), 'verschachtelt' (3×3-Kachel mit festen Versätzen, danach 3×3-Mittel: wie 9-fache Abtastung, ohne Rauschen), 'zufall' (je Pixel gewürfelt wie das Blender-Demo: körnig)
-  arghEdge: 0.3,            // Randweichheit in freien Weglängen (Breite der Dichterampe an der Hautkante); 0 = harte Stufe wie ColorRamp „Constant“
-  arghSmooth: 0.25,          // Glättung der Höhe (Mip-Stufe), entfernt Facetten bei Vergrößerung
+  arghEdge: 0.1,            // Randweichheit in freien Weglängen (Breite der Dichterampe an der Hautkante); 0 = harte Stufe wie ColorRamp „Constant“
+  arghSmooth: 0,            // Glättung der Höhe (Mip-Stufe), entfernt Facetten bei Vergrößerung
   arghSoft: isPhone ? 3 : 10, // Streupunkte der weichen Haut (0 = harte Haut); Handy 3 (5080: 1,8 ms statt 4,6 ms im vollen Bild)
   arghShadow: isPhone ? 4 : 8, // Schritte des Schattenstrahls zur Sonne
   arghSource: 'karte',    // Farbquelle des Volumens: 'karte' = Referenzkarte über Wind-Rückabbildung (Ansatz A, gemessen besser), 'dye' = live Farbstoff (Ansatz B)

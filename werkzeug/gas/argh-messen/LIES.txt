@@ -6,3 +6,4 @@ Voraussetzung: `npx vite --port 5174` im Repo, Python mit Playwright (E:\Claude\
   dauer.py '<json>' <ms>                                 Konsolenmeldungen, z. B. Dauer des Partikel-Referenzlaufs
   ref_argh.py <name> '<json>' [datei]                    Referenz: Standalone gasriese-volumen-demo (Port 5210) konvergiert rendern
 Bilder landen in _pruef/bilder (nicht versioniert). Reglerwerte setzen und onChange ausloesen wie das Menue (window.gasPlanet).
+  bilder_readme.py                                       Fotos fuer die README (docs/images/argh-*.png), Planet ueber das Vorlagen-Menue gewaehlt

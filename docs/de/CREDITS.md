@@ -37,6 +37,9 @@ Die Implementierung ist eigenständig. Wir danken den Autorinnen und Autoren:
 | Marcel Minnaert, 1941 | Randverdunkelung |
 | Krzysztof Narkowicz, *ACES Filmic Tone Mapping Curve* (2016) | Tonemapping |
 | Arghanion's Puzzlebox, [*Create an Epic Volumetric Gas Giant!*](https://www.youtube.com/watch?v=CrAn6j8S1gg) (Blender-Tutorial, nach Rui Huang) | Modul „Argh-Volumen“: von der Farbe verschobene Kugel-Dichte, konstante Farbrampe, Principled Volume; aus dem Nodebaum nachgebaut, keine Dateien übernommen |
+| Fabrice Neyret, [*Advected Textures*](https://diglib.eg.org/items/c4bf80cc-23f0-4107-958d-e03c0b9c8ac4/full) (SCA 2003) | Modul „Argh-Karte“: die Textur-Parametrisierung statt der Textur verschieben, damit die Karte scharf bleibt; die Rückstellung zur Identität ist eine eigene Variante |
+| Alexander Keller, Wolfgang Heidrich, *Interleaved Sampling*, Eurographics Workshop on Rendering 2001 | „Argh-Volumen“: verschachteltes Abtasten (3 × 3-Kachel fester Versätze, 3 × 3-Auflösung) statt zufälliger Körnung |
+| Solar System Scope, [Texturpaket](https://www.solarsystemscope.com/textures/) (CC BY 4.0) | Jupiter-Karte 4096 × 2048 für die Fotobilder des „Argh-Volumens“ (nicht in der App enthalten) |
 
 ### Physik und Messdaten (nur zur Kalibrierung, keine Bilder im Projekt)
 | Quelle | Verwendung |
