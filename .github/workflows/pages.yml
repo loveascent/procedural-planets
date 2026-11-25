@@ -1,5 +1,6 @@
-# Builds the simulator and publishes demo/ to GitHub Pages.
-# Enable once: Settings → Pages → Source: "GitHub Actions".
+# Publishes the committed, tested single-file build in demo/ as the site root of GitHub Pages
+# (so /index.html, /coffee.html, /gas-v0.1.html ... from the README work). Rebuild locally with `npm run build` and commit demo/.
+# Needs once: Settings → Pages → Source: "GitHub Actions".
 name: Pages
 
 on:
@@ -21,12 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
           path: demo
