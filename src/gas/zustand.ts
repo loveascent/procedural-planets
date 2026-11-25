@@ -68,7 +68,7 @@ export const S = {
   // Licht und Ansicht
   sunAngle: 35,
   // Relief-Module (alle aus = wie v0.4)
-  reliefMulti: false,     // mehrstufiges Relief
+  reliefMulti: true,      // mehrstufiges Relief, auf der Gasriesen-Seite an (im Sonnensystem aus, siehe neueEinstellungen)
   reliefCoarse: 1,        // Anteil der groben Stufen (große Wirbel, Bänder)
   reliefFine: 0.3,        // Anteil der feinen Stufe (Krümel, Partikel)
   reliefSize: 1,          // Größe der groben Stufen
@@ -106,7 +106,7 @@ export const DEFAULTS = { ...S };
 
 /** Frische Einstellungen für eine eingebettete Instanz: Standardwerte, Zustand merken aus, Hintergrund durchsichtig, kein eigener Himmel. */
 export function neueEinstellungen(): typeof S {
-  return { ...DEFAULTS, remember: false, transparent: true, nebula: 0, stars: 0, quality: 'welt', autoQuality: false };
+  return { ...DEFAULTS, remember: false, transparent: true, nebula: 0, stars: 0, quality: 'welt', autoQuality: false, reliefMulti: false };
 }
 
 // Geräteklassen: Startwerte und Obergrenzen der Regler. "ultra" schaltet die großen Werte frei.

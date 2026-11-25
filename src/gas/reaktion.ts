@@ -19,6 +19,7 @@ export function onChange(app: App, key: Key) {
       break;
     }
     case 'contrast': app.writeTables(); break;
+    case 'reliefMulti': app.updateVisibility(); break;
     case 'remember': try { localStorage.setItem('fgp-remember', app.S.remember ? '1' : '0'); } catch { /* gesperrt */ } if (app.S.remember && app.warm === 0) void app.saveState(); break;
     case 'fineStripes': app.needsDye = true; break;
     case 'velRes': case 'curlRes': app.allocVel(); break;

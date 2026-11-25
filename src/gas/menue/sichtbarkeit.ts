@@ -8,6 +8,7 @@ export function updateVisibility(app: App) {
   for (const k of ['particles', 'lifetime', 'opacity', 'blur', 'viewFocus']) app.panel.visible(k, look !== 'dye');
   app.panel.visible('fade', look === 'pure');
   for (const k of ['bandRelax', 'fineStripes', 'convection', 'stormTint']) app.panel.visible(k, look !== 'pure');
+  for (const k of ['reliefCoarse', 'reliefFine', 'reliefSize', 'reliefAdapt']) app.panel.visible(k, app.S.reliefMulti);   // Regler des Moduls nur, wenn es an ist
   // Abschnitte ohne sichtbare Regler ganz ausblenden
   for (const d of document.querySelectorAll<HTMLDetailsElement>('#panel-body details')) {
     const rows = [...d.querySelectorAll<HTMLElement>('.row')];
