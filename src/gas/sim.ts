@@ -1,6 +1,7 @@
 // Simulation: Uniforms schreiben, Rechenschritt (Stable Fluids oder Curl-Noise, Farbstoff, Partikel) auf der GPU.
 import type { App } from './app';
 import { OFF_CENTRE, OFF_VIEW, OFF_MODE, OFF_STORMS, OFF_INFO, OFF_WEIGHT, CubeField, DT } from './zustand';
+import { takt, jeSchritt, pflegeFaktor, gemerkteBindung } from './grafik/sim';
 
 /** init: alle Stürme mit voller Stärke, damit sie beim Start als Wirbel eingesetzt werden. */
 export function writeSim(a: App, dt: number, init = false) {
@@ -16,13 +17,13 @@ export function writeSim(a: App, dt: number, init = false) {
     a.S.confinement, a.S.drag, a.S.fineStripes, a.S.bfecc ? 1 : 0,
     a.S.bandRelax, a.S.convection, eddy * a.S.stormStrength, list.length,
     a.S.curlStrength * eddy, a.S.curlFreq, a.S.curlSpeed, a.S.curlOctaves,
-    a.S.particles, a.S.lifetime, a.S.opacity, a.S.blur,
+    a.S.particles, a.S.lifetime, jeSchritt(a, a.S.opacity), jeSchritt(a, a.S.blur),
     // Shader-Rauschen: Planeten-Seed plus Lauf-Seed ("Neu starten" würfelt nur den Lauf neu).
     (a.S.seed + a.runSeed) % 100000, a.S.bandWobble, a.S.stormTint, a.S.vortexCount,
   ], 0);
   d.set([...a.centre, a.S.fade], OFF_CENTRE);
   d.set([...a.camBody(), a.lookMode() === 'dye' ? 0 : a.S.viewFocus], OFF_VIEW);
-  d.set([a.lookMode() === 'pure' ? 1 : 0, eddy, 0, 0], OFF_MODE);
+  d.set([a.lookMode() === 'pure' ? 1 : 0, eddy, ...pflegeFaktor(a)], OFF_MODE);
   list.forEach((s, i) => {
     const la = (s.lat * Math.PI) / 180, lo = (s.lon * Math.PI) / 180;
     d.set([Math.cos(la) * Math.cos(lo), Math.sin(la), Math.cos(la) * Math.sin(lo), (s.radius * a.S.stormSize * Math.PI) / 180], OFF_STORMS + i * 4);
@@ -38,6 +39,11 @@ export function writeSim(a: App, dt: number, init = false) {
 
 /** buf: Puffer an Bindung 5 – Partikel für die Tracer-Shader, Breitenkreis-Mittel für den Fluid-Löser. */
 export function bind(app: App, a: CubeField | null, b: CubeField | null, dst: CubeField, buf: GPUBuffer = app.zonal): GPUBindGroup {
+  if (!app.S.fxBind) return neueBindung(app, a, b, dst, buf);
+  return gemerkteBindung(app, [(a ?? app.dummy).tex, (b ?? app.dummy).tex, dst.tex, buf], () => neueBindung(app, a, b, dst, buf));
+}
+
+function neueBindung(app: App, a: CubeField | null, b: CubeField | null, dst: CubeField, buf: GPUBuffer): GPUBindGroup {
   return app.device.createBindGroup({
     layout: app.computeLayout,
     entries: [
@@ -122,7 +128,7 @@ export function step(a: App, enc: GPUCommandEncoder) {
 
 /** Schrittweite: bei Tempo < 1 kleinere Schritte (flüssig, gleiche Physik), sonst fest 1/60 s. */
 export function dtStep(a: App): number {
-return a.warm > 0 ? DT : DT * Math.min(1, a.S.timeScale);
+return a.warm > 0 ? DT : DT * Math.min(1, a.S.timeScale) * takt(a.S);
 }
 
 export function simStep(a: App, enc: GPUCommandEncoder): CubeField {

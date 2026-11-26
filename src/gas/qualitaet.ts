@@ -18,10 +18,22 @@ export function applyQuality(a: App, fromUI: boolean) {
   a.allocParticles();
 }
 
-/** Einmal pro Start: passt ein Simulationsschritt nicht ins Budget, eine Stufe herunter. */
+/** Beim Start: passt ein Simulationsschritt nicht ins Budget, einen Hebel ziehen und neu messen (stepMs = 0 → schleife.ts misst
+ *  im nächsten Bild wieder), bis er passt. Vorher genau eine Stufe je Start: auf einer AMD-iGPU blieb „Desktop-GPU“ (Farbe 2048²)
+ *  dann bei 1536², Schritt gemessen 54 ms. */
 export function calibrate(a: App) {
   a.calibrated = true;
-  if (a.stepMs <= STEP_BUDGET_MS || a.downgrades >= 3) return;
+  if (a.stepMs <= STEP_BUDGET_MS) return;
+  // Erster Hebel: Farbpflege verteilt (Bild fast gleich). Gemessen auf AMD-iGPU (RDNA 2, 2 Recheneinheiten), Stufe Laptop:
+  // Schritt 23,4 → 7,8 ms, weil Bandfarbe, Sturmfarbe und Konvektion 80 % des Farbschritts kosten.
+  if (a.S.fxCare === '1') {
+    a.S.fxCare = '8';
+    a.onChange('fxCare');
+    a.panel.refresh();
+    a.stepMs = 0; a.calibrated = false;   // neu messen
+    return;
+  }
+  if (a.downgrades >= AUTO_TIERS.length) return;
   const idx = AUTO_TIERS.findIndex(([, dye]) => dye < a.S.dyeRes);
   if (idx < 0) return;
   [a.S.velRes, a.S.dyeRes] = AUTO_TIERS[idx];
@@ -29,6 +41,7 @@ export function calibrate(a: App) {
   a.allocVel();
   a.allocDye();
   a.panel.refresh();
+  a.stepMs = 0; a.calibrated = false;   // neu messen, ggf. nächste Stufe
   a.warmStart = performance.now();
   loadNote.textContent = t(`Qualität für 60 fps angepasst (${a.S.velRes}² / ${a.S.dyeRes}²)`, `Quality adjusted for 60 fps (${a.S.velRes}² / ${a.S.dyeRes}²)`);
 }
@@ -40,14 +53,16 @@ export function adaptScale(a: App, real: number) {
   if (a.scaleAcc < 1) return;
   const fps = a.scaleFrames / a.scaleAcc;
   a.scaleAcc = 0; a.scaleFrames = 0;
-  if (fps < 56) { a.renderScale = Math.max(0.5, a.renderScale - 0.1); a.goodSeconds = 0; }
+  // Ziel 60 (Standard): Grenze 56 wie bisher
+  if (fps < (Number(a.S.fxTarget) * 56) / 60) { a.renderScale = Math.max(0.5, a.renderScale - 0.1); a.goodSeconds = 0; }
   else if (++a.goodSeconds >= 3 && a.renderScale < 1) { a.renderScale = Math.min(1, a.renderScale + 0.05); a.goodSeconds = 0; }
 }
 
 export function resize(a: App) {
   if (a.kopflos) return;   // eingebettet: Größe legt die Welt fest
   // Pixeldichte direkt aus dem Regler: über der Bildschirmdichte = Supersampling (schärfer, teurer).
-  const dpr = a.dpr * (a.S.autoQuality ? a.renderScale : 1);
+  // „nur intern“: die Automatik verkleinert dann die Renderskala der Bildkette statt der Leinwand
+  const dpr = a.dpr * (a.S.autoQuality && !(a.S.fxDynIntern && a.S.fxUp !== 'off') ? a.renderScale : 1);
   const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
   const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
   if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }

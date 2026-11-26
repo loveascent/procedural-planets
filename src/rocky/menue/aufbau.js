@@ -2,6 +2,8 @@ import { Panel } from '../../ui';
 import { t, lang } from '../../i18n';
 import { initShell } from '../../shell';
 import { controls, addItem, itemByKey } from './regler.js';
+import { ketteRegler, ketteSichtbar } from '../../grafik/menue';
+import { grafikNachLinks } from '../../grafik/links';
 
 // Menü: dasselbe Panel wie beim Gasriesen (ⓘ-Erklärung, Blase beim Drüberfahren, Doppelklick = zurücksetzen).
 // Regler des anderen Stils stehen ausgegraut in einem eigenen Abschnitt ganz unten.
@@ -17,7 +19,7 @@ export function createMenu(ext) {
     for (const d of root.querySelectorAll('details')) if (d.dataset.id) openState[d.dataset.id] = d.open;
     root.innerHTML = '';
     DEF.sea = PP.water;
-    panel = new Panel(root, S, (k) => { if (k === 'style') { setStyle(S.style, true); return; } changed(itemByKey(k)); }, DEF);
+    panel = new Panel(root, S, (k) => { if (k === 'style') { setStyle(S.style, true); return; } changed(itemByKey(k)); if (k.startsWith('fx')) ketteSichtbar(panel, S); }, DEF);
     const secs = controls();
     const inactive = [];
     // Kopf: Stil und Seed
@@ -40,7 +42,12 @@ export function createMenu(ext) {
       root.lastElementChild.dataset.id = sec.id;
       for (const it of act) addItem(panel, it);
       if (sec.id === 'debug') panel.custom(lutCanvas);
+      if (sec.id === 'grafik' && !ext.kopflos) {   // neue Verfahren der Bildkette in denselben Abschnitt (eingebettet bestimmt die Welt die Bildkette)
+        ketteRegler(panel);
+        ketteSichtbar(panel, S);
+      }
     }
+    if (!ext.kopflos) grafikNachLinks(panel);   // Grafik-Abschnitt in die Leiste links
     if (inactive.length) {
       panel.section(S.style === 'orig' ? t('Nur in „+20 % besser“', 'Only in “+20 % better”') : t('Nur in „Original 1:1“', 'Only in “Original 1:1”'),
         t('Diese Regler wirken im gewählten Stil nicht.', 'These controls have no effect in the chosen style.'), !!openState.inactive);

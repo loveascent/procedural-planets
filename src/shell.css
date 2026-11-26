@@ -223,3 +223,26 @@ details.inactive > summary { color: var(--muted); }
 .welt-info td:first-child { color: #8fa6c4; padding-right: 8px; white-space: nowrap; }
 .welt-info td:last-child { color: var(--text); font-variant-numeric: tabular-nums; }
 .welt-ereignisse { white-space: pre-line; color: var(--muted); font: 11.5px/1.4 var(--mono); margin-top: 4px; }
+
+/* Grafik-Optionen: Ausklapper unter dem Kopf, gleicher Kasten wie der Steckbrief (.facts), Knopf wie „mehr ▾“ */
+#grafik-knopf { color: var(--accent); }
+.grafik-zeile { margin-top: 4px; }
+.grafik-zeile #grafik-knopf { margin-left: 0; }
+#grafik-links {
+  position: absolute; left: 16px; top: 150px; z-index: 4; box-sizing: border-box;
+  width: 300px; max-width: calc(100% - 32px); max-height: calc(100% - 214px);
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+  padding: 2px 10px 4px; background: rgba(10, 12, 16, 0.72); border: 1px solid var(--line); border-radius: 6px; backdrop-filter: blur(6px);
+}
+#grafik-links[hidden] { display: none; }
+#grafik-links details { padding-block: 4px 6px; }
+#grafik-links details:first-child { border-top: 0; }
+#grafik-links summary { font: 500 11.5px/1.4 var(--mono); letter-spacing: 0.02em; text-transform: none; color: #8fa6c4; padding-block: 3px; }
+#grafik-links summary::after { font-size: 11px; }
+#grafik-links details[open] > summary { color: var(--text); }
+#grafik-links .note { font-size: 11px; margin: 0 0 4px; }
+#grafik-links .row { padding-block: 3px; gap: 2px 6px; }
+#grafik-links .row label { font-size: 12px; }
+#grafik-links select { font-size: 12px; padding: 3px 6px; }
+#grafik-links .row input[type=range] { height: 18px; }
+@media (max-width: 760px) { #grafik-links { width: min(300px, calc(100% - 32px)); } }

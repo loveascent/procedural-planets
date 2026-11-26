@@ -1,9 +1,16 @@
 // Darstellung: Render-Uniforms, ein Bild zeichnen, Zielbild, Prüf-Auslesung.
 import type { App } from './app';
+import { grafikNoetig, zeichneGrafik, grafikAus } from './grafik/pfad';
+import { takt, verteilt, verteilenAus, abschliessen, gezeigt } from './grafik/sim';
 import { hexToLinear } from '../presets';
+import { renderVarianten } from './shader/render_zusammen';
+import type { CubeField } from './zustand';
 import { Vec3, perspective, lookAt, invert, multiply, planetRotation, normalize } from '../math';
 
-export function writeRender(app: App) {
+/** Blick eines Bildes: inverse Projektion × Ansicht, Augpunkt und die Zeilen der Drehung Welt -> Körper. */
+export interface Pose { inv: Float32Array; auge: Vec3; zeilen: Vec3[] }
+
+export function kameraPose(app: App, spin: number): Pose {
   const w = app.W, h = app.H;
   const cy = Math.cos(app.cam.pitch), sy = Math.sin(app.cam.pitch);
   const ov = app.ansicht;   // eingebettet: Kamera, Sonne und Drehung kommen von außen
@@ -12,7 +19,19 @@ export function writeRender(app: App) {
   const view = lookAt(eye, [0, 0, 0], [0, 1, 0]);
   const inv = ov ? ov.invVP : invert(multiply(proj, view));
   // Welt -> Körper = Transponierte von (Neigung · Drehung)
-  const m = planetRotation((app.preset.tilt * Math.PI) / 180, ov ? ov.drehung : app.spin);
+  const m = planetRotation((app.preset.tilt * Math.PI) / 180, ov ? ov.drehung : spin);
+  return { inv: inv as Float32Array, auge: eye, zeilen: [[m[0][0], m[1][0], m[2][0]], [m[0][1], m[1][1], m[2][1]], [m[0][2], m[1][2], m[2][2]]] };
+}
+
+/** Sichtbare Drehung je Sekunde Simulationszeit. */
+export const drehrate = (app: App) => 0.08 * app.S.spinSpeed * (9.93 / app.preset.rotationHours) * app.dir();
+
+export function writeRender(app: App) {
+  const w = app.W, h = app.H;
+  const ov = app.ansicht;
+  const lauf = app.lauf;    // Zusätze der Grafik-Optionen für dieses Bild; null = wie bisher
+  const pose = kameraPose(app, app.spin + (lauf ? lauf.dSpin : 0));
+  const eye = pose.auge, inv = pose.inv, z = pose.zeilen;
   const a = (app.S.sunAngle * Math.PI) / 180;
   const sun = ov ? normalize(ov.sonne) : normalize([Math.sin(a), 0.18, Math.cos(a)]);
   const atmo = hexToLinear(app.preset.atmosphere);
@@ -20,25 +39,78 @@ export function writeRender(app: App) {
   const rc = ring ? hexToLinear(ring.color) : [0, 0, 0];
   const d = app.renderData;
   d.set(inv, 0);
+  if (lauf) {
+    lauf.pose = pose;
+    if (lauf.jitter) {   // Unterpixel-Versatz: den Sichtstrahl um (jx, jy) Zielpixel verschieben
+      const t = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, (2 * lauf.jitter[0]) / lauf.ziel[0], (-2 * lauf.jitter[1]) / lauf.ziel[1], 0, 1]);
+      d.set(multiply(inv, t), 0);
+    }
+  }
   d.set([
     ...eye, 1,
-    m[0][0], m[1][0], m[2][0], 0,
-    m[0][1], m[1][1], m[2][1], 0,
-    m[0][2], m[1][2], m[2][2], 0,
+    ...z[0], 0,
+    ...z[1], 0,
+    ...z[2], 0,
     ...sun, 1.7 * (ov ? ov.helligkeit : 1),
     atmo[0], atmo[1], atmo[2], app.preset.atmosphereStrength * app.S.atmosphere,
     app.preset.oblateness, app.S.relief, app.S.limb, app.S.view,
     app.S.map ? 1 : 0, ring ? ring.inner : 0, ring ? ring.outer : 0, ring ? ring.opacity : 0,
     w / h, app.time, app.S.exposure, app.S.dyeRes,
     rc[0], rc[1], rc[2], 0.6,
-    1 / Math.max(app.S.jetStrength, 1e-4), (2 * (ov ? ov.tanHalbFov : Math.tan((16 * Math.PI) / 180))) / h, app.sky.ready ? app.sky.n : 0, app.S.nebula,
+    1 / Math.max(app.S.jetStrength, 1e-4), (2 * (ov ? ov.tanHalbFov : Math.tan((16 * Math.PI) / 180))) / (lauf ? lauf.pixH : h), app.sky.ready ? app.sky.n : 0, app.S.nebula,
     app.S.stars, app.S.reliefMulti ? app.S.reliefCoarse : 0, app.S.reliefFine, app.S.reliefAdapt ? 1 : 0,
     app.S.depthOn ? 1 : 0, app.S.depthStrength, app.S.depthSource === 'pressure' && app.flowMode() === 'fluid' ? 0 : 1, app.S.velRes,
     app.S.pomOn ? 1 : 0, app.S.pomHeight, app.S.pomShadow, app.S.reliefSize,
-    ({ v04: 0, off: 1, soft: 2 } as Record<string, number>)[app.S.twilight] ?? 0, ({ v04: 0, soft: 1, off: 2 } as Record<string, number>)[app.S.rimGlow] ?? 0, 0, 0,
+    ({ v04: 0, off: 1, soft: 2 } as Record<string, number>)[app.S.twilight] ?? 0, lauf ? lauf.bildNr : ({ v04: 0, soft: 1, off: 2 } as Record<string, number>)[app.S.rimGlow] ?? 0, lauf ? lauf.tau : 0, lauf ? lauf.muster : 0,
     app.S.arghOn ? 1 : 0, app.S.arghMix, app.S.arghDensity, app.S.arghAniso,
   ], 16);
   app.device.queue.writeBuffer(app.renderBuf, 0, d);
+}
+
+// Helligkeit des Farbstoffs als eigener Würfel (r16float) für das mehrstufige Relief: es tastet je Pixel 36-mal ab.
+// Messung 26.11. (iGPU, 1175×1000): Relief = ~60 % des Bild-Shaders; vier Byte weniger je Abtastung und kein Skalarprodukt je Probe.
+// Gleiches Bild: Helligkeit ist linear in rgb, also luminance(bilinear(rgb)) = bilinear(luminance(rgb)); Gewichte wie luminance() in render_basis.ts.
+// r16float ist im WebGPU-Kern renderbar und filterbar (WebGPU-Spezifikation, Tabelle „Plain color formats“), als Speicher-Textur aber nicht: daher Render-Durchgang,
+// alle sechs Seiten auf einmal als sechs Farbziele (Kern-Grenzen: maxColorAttachments 8, maxColorAttachmentBytesPerSample 32 ≥ 6 × 2 Byte).
+const HELL_WGSL = /* wgsl */`
+@group(0) @binding(0) var src: texture_2d_array<f32>;
+struct A { @location(0) a: vec4f, @location(1) b: vec4f, @location(2) c: vec4f, @location(3) d: vec4f, @location(4) e: vec4f, @location(5) f: vec4f };
+@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f { return vec4f(vec2f(f32((i << 1u) & 2u), f32(i & 2u)) * 2.0 - 1.0, 0.0, 1.0); }
+fn l(p: vec2i, f: i32) -> vec4f { return vec4f(dot(textureLoad(src, p, f, 0).rgb, vec3f(0.3, 0.59, 0.11)), 0.0, 0.0, 1.0); }
+@fragment fn fs(@builtin(position) pos: vec4f) -> A {
+  let p = vec2i(pos.xy);
+  return A(l(p, 0), l(p, 1), l(p, 2), l(p, 3), l(p, 4), l(p, 5));
+}`;
+interface Hell { n: number; tex: GPUTexture; cube: GPUTextureView; seiten: GPUTextureView[]; pipe: GPURenderPipeline; leer: GPUTextureView; quelle: Map<GPUTexture, GPUBindGroup> }
+const hellJe = new WeakMap<App, Hell>();
+
+/** Helligkeits-Würfel des gezeigten Farbstoffs, neu gerechnet je Aufruf; nur wenn das mehrstufige Relief an ist, sonst ein leerer Würfel. */
+export function helligkeit(app: App, enc: GPUCommandEncoder, dye: CubeField): GPUTextureView {
+  let h = hellJe.get(app);
+  if (!h) {
+    const m = app.device.createShaderModule({ label: 'helligkeit', code: HELL_WGSL });
+    const pipe = app.device.createRenderPipeline({ layout: 'auto', vertex: { module: m, entryPoint: 'vs' }, fragment: { module: m, entryPoint: 'fs', targets: Array(6).fill({ format: 'r16float' }) }, primitive: { topology: 'triangle-list' } });
+    const leer = app.device.createTexture({ size: [1, 1, 6], format: 'r16float', usage: GPUTextureUsage.TEXTURE_BINDING }).createView({ dimension: 'cube' });
+    h = { n: 0, tex: null as unknown as GPUTexture, cube: leer, seiten: [], pipe, leer, quelle: new Map() };
+    hellJe.set(app, h);
+  }
+  if (renderVarianten(app.preset, app.S).relief !== 'mehrstufig' || app.S.view !== 0) return h.leer;
+  if (h.n !== dye.n) {
+    h.tex?.destroy(); h.quelle.clear();
+    h.n = dye.n;
+    h.tex = app.device.createTexture({ size: [dye.n, dye.n, 6], format: 'r16float', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+    h.cube = h.tex.createView({ dimension: 'cube' });
+    h.seiten = [0, 1, 2, 3, 4, 5].map((f) => h!.tex.createView({ dimension: '2d', baseArrayLayer: f, arrayLayerCount: 1 }));
+  }
+  let bg = h.quelle.get(dye.tex);
+  if (!bg) {
+    if (h.quelle.size > 8) h.quelle.clear();
+    bg = app.device.createBindGroup({ layout: h.pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: dye.store }] });
+    h.quelle.set(dye.tex, bg);
+  }
+  const p = enc.beginRenderPass({ colorAttachments: h.seiten.map((view) => ({ view, loadOp: 'clear' as const, storeOp: 'store' as const })) });
+  p.setPipeline(h.pipe); p.setBindGroup(0, bg); p.draw(3); p.end();
+  return h.cube;
 }
 
 /** Ein Bild: Simulationsschritt(e) und Darstellung. */
@@ -46,6 +118,7 @@ export function frameOnce(app: App, real: number) {
   const ov = app.ansicht;
   app.buildRenderPipe();   // Darstellungs-Bausteine an/aus: Pipeline nur neu bauen, wenn sich ein Schalter geändert hat
   app.initIfNeeded();
+  if (!app.S.fxSimSplit) verteilenAus(app); else if (app.S.paused) abschliessen(app);
   let flowSrc = app.flowMode() === 'fluid' ? app.vel[app.vc] : app.flow;
   let n = 0;
   if (!app.S.paused) {
@@ -53,16 +126,22 @@ export function frameOnce(app: App, real: number) {
     // der Bildrate (bis v0.2.3 war es ein Schritt pro Bild, bei 240 fps lief alles viermal so
     // schnell). Jeder Schritt ist gleich groß, der Zeitraffer ändert also nicht die Physik,
     // sondern nur, wie viel Simulationszeit pro Sekunde vergeht. Im Testmodus: fester Takt.
-    app.stepAcc += app.testTakt ? Math.max(1, app.S.timeScale) : real * 60 * Math.max(1, app.S.timeScale);
+    app.stepAcc += (app.testTakt ? Math.max(1, app.S.timeScale) : real * 60 * Math.max(1, app.S.timeScale)) / takt(app.S);
     // Obergrenze aus der gemessenen Schrittzeit, damit das Bild flüssig bleibt.
     const cap = Math.max(1, Math.min(64, Math.floor(12 / Math.max(app.stepMs, 0.1))));
     n = Math.min(Math.floor(app.stepAcc), cap);
     app.stepAcc = Math.min(app.stepAcc - n, 2);
-    for (let k = 0; k < n; k++) flowSrc = app.submitStep();
+    if (app.S.fxSimSplit) {
+      verteilt(app, n);
+      flowSrc = app.flowMode() === 'fluid' ? app.vel[app.vc] : app.flow;
+    } else for (let k = 0; k < n; k++) flowSrc = app.submitStep();
   }
   app.achieved = app.achieved * 0.97 + (real > 0 ? (n * app.dtStep() / real) : 0) * 0.03;
   // Sichtbare Drehung in Simulationszeit: Zeitraffer beschleunigt Wolken und Drehung gleich.
   app.spin += n * app.dtStep() * 0.08 * app.S.spinSpeed * (9.93 / app.preset.rotationHours) * app.dir();
+  if (grafikNoetig(app.S)) { zeichneGrafik(app, flowSrc); return; }
+  grafikAus(app);
+  const bild = gezeigt(app, flowSrc);
   const enc = app.device.createCommandEncoder();
   app.sky.tick(enc);
   app.writeRender();
@@ -72,11 +151,12 @@ export function frameOnce(app: App, real: number) {
     entries: [
       { binding: 0, resource: { buffer: app.renderBuf } },
       { binding: 1, resource: app.sampler },
-      { binding: 2, resource: app.dye[app.dc].cube },
-      { binding: 3, resource: flowSrc.cube },
+      { binding: 2, resource: bild.dye.cube },
+      { binding: 3, resource: bild.flow.cube },
       { binding: 4, resource: app.aux.cube },
-      { binding: 5, resource: app.prs[app.pc].cube },
+      { binding: 5, resource: bild.prs.cube },
       { binding: 6, resource: app.sky.view },
+      { binding: 8, resource: helligkeit(app, enc, bild.dye) },
     ],
   });
   const rp = enc.beginRenderPass({

@@ -96,6 +96,18 @@ and are **not** part of the repository. Screenshots in `docs/images/` are render
 | A. Emsenhuber, E. Asphaug, S. Cambioni, T. Gabriel, S. Schwartz, R. Melikyan, C. A. Denton, *A New Database of Giant Impacts over a Wide Range of Masses and with Material Strength* (PSJ 2024; arXiv:2401.17356) | debris speed ≈ half the impact speed (newer than the 1.1 v_esc used by N-body codes) |
 | S. Childs & J. Steffen, *Collisional fragmentation and bulk composition tracking in REBOUND* (2022; arXiv:2201.05714); H. Rein & S.-F. Liu, REBOUND (A&A 537, A128, 2012) | cross-check of the above, fragment speed 1.1 v_esc, equal-mass fragments, hard-sphere bounce with restitution |
 
+### Graphics options: frame rate and anti-aliasing (`src/grafik/`, `src/gas/grafik/`)
+| Source | Used for |
+|---|---|
+| Yang, Liu, Salvi, *A Survey of Temporal Antialiasing Techniques*, CGF 2020 | TAA, temporal upscaling, history rejection/clipping, checkerboard and interlaced reconstruction, reverse reprojection |
+| M. Salvi, *An Excursion in Temporal Supersampling*, GDC 2016 | variance clipping, 10 % new-frame weight |
+| T. Lottes, *FXAA* whitepaper, NVIDIA 2009 | FXAA method (steps and quality constants), own implementation |
+| A. Reshetov, *Morphological Antialiasing*, 2009; Jimenez et al., *SMAA*, 2012 | morphological anti-aliasing: edge test and coverage areas, own implementation without diagonals |
+| T. Lottes, *FidelityFX Super Resolution 1.0*, SIGGRAPH 2021 course (talk text); Bigün & Granlund 1987 | edge-adaptive upscaling after the description; the feature measure is the structure-tensor coherence (not AMD’s code, not identical) |
+| AMD, *FidelityFX CAS* presentation, GDC 2019 | contrast-adaptive sharpening, own implementation |
+| M. Pettineo (TheRealMJP), *Tex2DCatmullRom.hlsl* gist (MIT licence, https://gist.github.com/TheRealMJP/c83b8c0f46b63f3a88a5986f4fa982b1), after vec3.ca *Bicubic filtering in fewer taps*; R. Keys 1981; K. Turkowski 1990 | Catmull-Rom 9-tap weights in the temporal history sampling (adapted from the MIT gist); Lanczos |
+| J. Jimenez, interleaved gradient noise (2014, temporal variant 2016) | output dithering and ray-start jitter |
+
 ### Fonts and tools
 IBM Plex Sans/Mono (SIL OFL), Barlow Condensed (SIL OFL), loaded via Google Fonts.
 Vite, TypeScript, `@webgpu/types`, `vite-plugin-singlefile` (all MIT).

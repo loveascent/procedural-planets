@@ -3,6 +3,7 @@ import type { App } from './app';
 import { t } from '../i18n';
 import { loadNote } from './dom';
 import { CubeField } from './zustand';
+import { felderNeu } from './grafik/sim';
 
 export function cubeField(a: App, n: number): CubeField {
   const tex = a.device.createTexture({
@@ -18,6 +19,7 @@ export function cubeField(a: App, n: number): CubeField {
 }
 
 export function allocVel(a: App) {
+  felderNeu(a);
   for (const f of [...a.vel, ...a.prs]) f.tex.destroy();
   a.aux?.tex.destroy(); a.div?.tex.destroy(); a.flow?.tex.destroy();
   const n = a.S.velRes;
@@ -44,6 +46,7 @@ export function memoryNote(a: App) {
 }
 
 export function allocDye(a: App) {
+  felderNeu(a);
   for (const f of a.dye) f.tex.destroy();
   a.device.pushErrorScope('out-of-memory');
   a.dye = [a.cubeField(a.S.dyeRes), a.cubeField(a.S.dyeRes)];
@@ -61,6 +64,7 @@ export function allocParticles(a: App) {
   const want = Math.min(a.S.particles, Math.floor(a.device.limits.maxStorageBufferBindingSize / 32));
   a.S.particles = want;
   if (want <= a.partCapacity) return;
+  felderNeu(a);
   a.parts?.destroy();
   a.device.pushErrorScope('out-of-memory');
   a.parts = a.device.createBuffer({ size: want * 32, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });

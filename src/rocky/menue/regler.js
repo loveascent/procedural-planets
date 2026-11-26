@@ -7,9 +7,6 @@ export const pct = (v) => `${Math.round(v * 100)} %`;
 export function controls() {
   return [
     { id: 'planet', title: t('Planet', 'Planet'), open: true, items: [
-      { k: 'res', type: 'select', label: t('Kartenauflösung', 'Map resolution'), opts: [[512, '512'], [1024, '1024'], [2048, '2048'], [4096, t('4096 (~1 GB Grafikspeicher)', '4096 (~1 GB GPU memory)')], [8192, t('8192 (~4,5 GB, starke Grafikkarte)', '8192 (~4.5 GB, strong GPU)')]], regen: true,
-        help: t('Pixel pro Würfelseite für Höhe, Feuchte und Relief (im Original "resolution"). Sechs Seiten ergeben die Kugel; 2048 sind rund um den Äquator 8192 Pixel.', 'Pixels per cube face for height, moisture and relief (the original\'s "resolution"). Six faces make the sphere; 2048 is 8192 pixels around the equator.'),
-        fx: t('Speicher: 6·N²·8 Byte (+⅓ Mipmaps)', 'Memory: 6·N²·8 bytes (+⅓ mipmaps)') },
       { k: 'palette', mode: 'plus', type: 'select', label: t('Farben', 'Colours'), opts: [['earth', t('Erdähnlich', 'Earth-like')], ['cd', t('Original-Biombild', 'Original biome image')]],
         help: t('Biom-Bild: dieselben Zufallsfarben wie im Original, aber physikalisch beleuchtet. Erdähnlich: Klimazonen aus Breite, Höhe und Feuchte (Wüste, Steppe, Wald, Regenwald, Taiga, Tundra, Fels, Schnee).', 'Biome image: the same random colours as the original, but physically lit. Earth-like: climate zones from latitude, altitude and moisture (desert, steppe, forest, rainforest, taiga, tundra, rock, snow).'),
         fx: 'T = 1 − 1,25·|sin φ|^1,35 − 1,6·(h − s),  Biom = f(T, Feuchte, Hang)' },
@@ -156,10 +153,15 @@ export function controls() {
         fx: 'T = 360° / ω' },
       { k: 'tilt', min: 0, max: 90, step: 1, label: t('Achsneigung', 'Axial tilt'), fmt: (v) => `${Math.round(v)}°` },
       { k: 'fov', min: 15, max: 75, step: 1, label: t('Blickwinkel', 'Field of view'), fmt: (v) => `${Math.round(v)}°` },
-      { k: 'msaa', type: 'select', label: t('Kantenglättung (MSAA)', 'Anti-aliasing (MSAA)'), opts: [[1, t('aus (wie v23, schneller)', 'off (as in v23, faster)')], [4, t('4× (v24, glatter, kostet FPS)', '4× (v24, smoother, costs fps)')]],
-        help: t('Glättet Planetenrand und Bergsilhouetten. Kostet viel Leistung, besonders mit hoher Bildauflösung. Umschalten lädt die Seite neu.', 'Smooths the planet limb and mountain silhouettes. Costs a lot of performance, especially at high render resolution. Switching reloads the page.') },
+    ] },
+    { id: 'grafik', title: t('Grafik: Auflösung, Bildrate und Glättung', 'Graphics: resolution, frame rate and anti-aliasing'), items: [
+      { k: 'res', type: 'select', label: t('Kartenauflösung', 'Map resolution'), opts: [[512, '512'], [1024, '1024'], [2048, '2048'], [4096, t('4096 (~1 GB Grafikspeicher)', '4096 (~1 GB GPU memory)')], [8192, t('8192 (~4,5 GB, starke Grafikkarte)', '8192 (~4.5 GB, strong GPU)')]], regen: true,
+        help: t('Pixel pro Würfelseite für Höhe, Feuchte und Relief (im Original "resolution"). Sechs Seiten ergeben die Kugel; 2048 sind rund um den Äquator 8192 Pixel.', 'Pixels per cube face for height, moisture and relief (the original\'s "resolution"). Six faces make the sphere; 2048 is 8192 pixels around the equator.'),
+        fx: t('Speicher: 6·N²·8 Byte (+⅓ Mipmaps)', 'Memory: 6·N²·8 bytes (+⅓ mipmaps)') },
       { k: 'quality', type: 'select', label: t('Bildauflösung', 'Render resolution'), opts: [[-1, t('Automatisch wie v21 (höchstens 100 %)', 'Automatic as v21 (at most 100 %)')], [0, t('Automatisch v22+ (bis 200 %, frisst die GPU bis ~60 fps)', 'Automatic v22+ (up to 200 %, fills the GPU down to ~60 fps)')], [2, t('200 % (Supersampling)', '200 % (supersampling)')], [1.5, '150 %'], [1, '100 %'], [0.75, '75 %'], [0.5, '50 %']],
         help: t('Automatisch senkt die Bildauflösung, wenn die Grafikkarte nicht hinterherkommt, und hebt sie wieder, sobald Luft ist.', 'Automatic lowers the render resolution when the GPU cannot keep up and raises it again when there is headroom.') },
+      { k: 'msaa', type: 'select', label: t('Kantenglättung (MSAA)', 'Anti-aliasing (MSAA)'), opts: [[1, t('aus (wie v23, schneller)', 'off (as in v23, faster)')], [4, t('4× (v24, glatter, kostet FPS)', '4× (v24, smoother, costs fps)')]],
+        help: t('Glättet Planetenrand und Bergsilhouetten. Kostet viel Leistung, besonders mit hoher Bildauflösung. Umschalten lädt die Seite neu.', 'Smooths the planet limb and mountain silhouettes. Costs a lot of performance, especially at high render resolution. Switching reloads the page.') },
     ] },
     { id: 'debug', title: 'Debug', items: [
       { k: 'view', type: 'select', label: t('Anzeige', 'Display'), opts: [[0, t('Farbe', 'Colour')], [1, t('Höhe', 'Height')], [2, t('Feuchte', 'Moisture')], [3, t('Normalen', 'Normals')], [4, t('Rauigkeit', 'Roughness')], [5, t('Albedo', 'Albedo')], [6, t('Flüsse & Seen (Eintiefung, Wasser, Bett)', 'Rivers & lakes (carving, water, bed)')]],

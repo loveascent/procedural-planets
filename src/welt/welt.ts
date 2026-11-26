@@ -25,6 +25,8 @@ import { erstelleRockyEinbettung } from './zeichnen/rockyEinbettung.ts';
 import { erstelleEinblendung } from './zeichnen/einblendung.ts';
 import { U_BYTES, MAX_KUGELN } from './zeichnen/shader/gemeinsam.ts';
 import { baueOberflaeche, WELT_STANDARD, type Steuerung } from './oberflaeche/panel.ts';
+import { Kette } from '../grafik/kette.ts';
+import { KETTE_STANDARD, ketteAn, ketteSichtbar, zuFrueh, type KettenStand } from '../grafik/menue.ts';
 import type { Settings } from '../ui.ts';
 import { FELS_BAUSTEINE, GAS_BAUSTEINE } from './typBausteine.ts';
 
@@ -120,7 +122,8 @@ export async function startWelt() {
     return {
       format: 'sonnensystem', version: 1, name, seed, zeit: w.zeit, naechsteId: w.naechsteId,
       koerper: JSON.parse(JSON.stringify(w.koerper)),
-      einstellungen: JSON.parse(JSON.stringify(E)),
+      // Grafik-Optionen stehen nur im Stand, wenn sie an sind (alles aus: derselbe Stand wie ohne sie)
+      einstellungen: Object.fromEntries(Object.entries(JSON.parse(JSON.stringify(E)) as Settings).filter(([k, v]) => !(k.startsWith('fx') && v === standard[k]))),
       gas: gasE.holeEinstellungen(), fels: felsE.holeEinstellungen(), gasTyp: gasE.holeTyp(), felsTyp: felsE.holeTyp(),
       kamera: { gier: kam.gier, neigung: kam.neigung, abstand: abstandZiel, fokus },
     };
@@ -129,7 +132,9 @@ export async function startWelt() {
     seed = s.seed;
     w = neueWelt(seed * 7919 + 13);
     w.koerper = s.koerper; w.naechsteId = s.naechsteId; w.zeit = s.zeit;
+    for (const k of Object.keys(KETTE_STANDARD)) E[k] = standard[k];   // fehlt eine Grafik-Option im Stand, ist sie aus
     Object.assign(E, s.einstellungen);
+    ketteSichtbar(panel, E as unknown as KettenStand);
     monde = !!E.monde;
     tempo = Math.pow(10, Number(E.tempoLog)); pause = !!E.pause;
     baueShader();
@@ -210,6 +215,7 @@ export async function startWelt() {
     info: () => ({ ...info, koerper: w.koerper.length, truemmer: w.truemmer.n, zeit: w.zeit, verworfen: w.verworfen, ereignisse: w.ereignisse.length }),
   };
   const wirkt = (key: string) => {
+    if (key.startsWith('fx')) { ketteSichtbar(panel, E as unknown as KettenStand); return; }
     if (key === 'qualitaet') {
       const st = QUALITAET[String(E.qualitaet)] ?? QUALITAET.mittel;
       E.aufl = st.aufl; E.anPx = st.anPx;
@@ -270,11 +276,22 @@ export async function startWelt() {
 
   // ---------- Bild ----------
   let letzte = performance.now(), fpsZaehler = 0, fpsZeit = 0;
+  let kette: Kette | null = null;   // Grafik-Optionen: gibt es nur, solange eine Stufe an ist
   function bild(jetztMs: number) {
+    const grafik = E as unknown as KettenStand;
+    if (zuFrueh(grafik.fxCap, jetztMs, letzte)) { requestAnimationFrame(bild); return; }
     const dt = Math.min(0.1, (jetztMs - letzte) / 1000); letzte = jetztMs; jetzt += dt;
     fpsZaehler++; fpsZeit += dt; if (fpsZeit > 0.5) { info.fps = fpsZaehler / fpsZeit; fpsZaehler = 0; fpsZeit = 0; }
     g.anpassen();
-    const [W, H] = g.groesse();
+    let [W, H] = g.groesse();
+    // Grafik-Optionen: die Welt zeichnet dann in der internen Auflösung (W, H), die Bildkette rechnet auf die Leinwand um
+    let stufen: ReturnType<Kette['seite']> | null = null;
+    let enc: GPUCommandEncoder;
+    if (ketteAn(grafik)) {
+      kette ??= new Kette(dev);
+      stufen = kette.seite(() => enc, () => g.ctx.getCurrentTexture().createView(), g.format, W, H, grafik);
+      W = stufen.w; H = stufen.h;
+    } else if (kette) { kette.zerstoeren(); kette = null; }
 
     if (!pause) {
       info.teilschritte = weltSchritt(w, dt, tempo, { planetenZiehen: schalter.planetenZiehen, kollision: schalter.kollision, truemmer: schalter.truemmer, ls12: schalter.ls12 });
@@ -330,7 +347,7 @@ export async function startWelt() {
     // Instanzen rechnen in Bildschirmauflösung × „Auflösung der echten Planeten“, die Einblendung skaliert sie auf das Bild
     const aufl = Math.min(2, Math.max(0.2, Number(E.aufl)));
     const sicht = w.koerper.filter(sichtbar);
-    const kontext = { koerper: sicht, auge, vp, breite: Math.max(16, Math.round(W * aufl)), hoehe: Math.max(16, Math.round(H * aufl)), tanHalbFov: Math.tan(kam.fov / 2), pixelProRadiant: H / kam.fov, sonneRel: sr as V3, dt: dt * (pause ? 0 : 1), dtReal: dt, anPx: Number(E.anPx), einschwingen: Number(E.einschwingen), neuGebacken: (b: Koerper) => tex.neuBacken(b), vor: b.vor, oben: b.oben, fov: kam.fov, aspekt: W / H };
+    const kontext = { koerper: sicht, auge, vp, breite: Math.max(16, Math.round(W * aufl)), hoehe: Math.max(16, Math.round(H * aufl)), tanHalbFov: Math.tan(kam.fov / 2), pixelProRadiant: H / kam.fov, sonneRel: sr as V3, dt: dt * (pause ? 0 : 1), dtReal: dt, anPx: Number(E.anPx), neuGebacken: (b: Koerper) => tex.neuBacken(b), vor: b.vor, oben: b.oben, fov: kam.fov, aspekt: W / H };
     const ein = gasE.aktualisiere(kontext, schalter.gasLive);
     info.gas = gasE.status;
     const einFels = felsE.aktualisiere(kontext, schalter.felsLive);
@@ -394,10 +411,11 @@ export async function startWelt() {
     const nlin = schalter.spuren ? spuren.fuelle(w, auge, lin, schalter.mondbahnen, bahnSicht, roh) : 0;
     linien.setze(lin, nlin);
 
-    const enc = dev.createCommandEncoder();
+    enc = dev.createCommandEncoder();
+    const innen = stufen && (stufen.w !== g.groesse()[0] || stufen.h !== g.groesse()[1]);
     const pass = enc.beginRenderPass({
-      colorAttachments: [{ view: g.ctx.getCurrentTexture().createView(), clearValue: { r: 0, g: 0, b: 0.003, a: 1 }, loadOp: 'clear', storeOp: 'store' }],
-      depthStencilAttachment: { view: g.tiefe(), depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'store' },
+      colorAttachments: [{ view: stufen ? stufen.bild() : g.ctx.getCurrentTexture().createView(), clearValue: { r: 0, g: 0, b: 0.003, a: 1 }, loadOp: 'clear', storeOp: 'store' }],
+      depthStencilAttachment: { view: innen ? kette!.holen('tiefe', W, H, 'depth32float').v : g.tiefe(), depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'store' },
     });
     if (schalter.himmel) himmel.zeichne(pass);
     planeten.zeichne(pass);
@@ -406,6 +424,7 @@ export async function startWelt() {
     if (schalter.spuren) linien.zeichne(pass);
     leuchten.zeichne(pass);
     pass.end();
+    stufen?.fertig();
     dev.queue.submit([enc.finish()]);
     w.koerper.forEach((k, i) => { k.p[0] = echt[i].p[0]; k.p[1] = echt[i].p[1]; k.p[2] = echt[i].p[2]; k.spin = echt[i].s; });
     w.truemmer.p.set(trEcht);

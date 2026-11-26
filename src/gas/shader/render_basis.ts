@@ -28,6 +28,7 @@ struct R {
 @group(0) @binding(4) var auxTex: texture_cube<f32>;
 @group(0) @binding(5) var prsTex: texture_cube<f32>;
 @group(0) @binding(6) var skyTex: texture_2d_array<f32>;   // gemeinsamer Himmel (src/sky)
+@group(0) @binding(8) var lumTex: texture_cube<f32>;        // Helligkeit des Farbstoffs (nur mehrstufiges Relief, darstellung.ts helligkeit)
 
 const PI = 3.14159265359;
 
@@ -97,7 +98,7 @@ fn fs(vin: VOut) -> @location(0) vec4f {
   let sun = normalize(toBody(U.sun.xyz));
   let c = 1.0 - U.p0.x;
 
-  var col = hook_himmel(dir);
+  var col = vec3f(0.0);
   var tPlanet = hitPlanet(o, d);
   // Baustein „Argh-Volumen“ (aus: nichts ändert sich): Haut eines Dichtefelds statt glatter Oberfläche, Silhouette buckelig
   let argh = hook_argh(o, d, sun, c, tPlanet, mode);
@@ -106,7 +107,9 @@ fn fs(vin: VOut) -> @location(0) vec4f {
 
   // Atmosphärensaum außerhalb der Planetenscheibe.
   if (tPlanet < 0.0) {
-    col = hook_saum_aussen(col, o, d, sun, c);
+    // Himmel nur für Pixel, die den Planeten verfehlen: auf dem Planeten wurde er bisher gerechnet und danach überschrieben
+    // (Messung 26.11., iGPU: Himmel kostet ~1 ms je Bild bei 1175×1000).
+    col = hook_saum_aussen(hook_himmel(dir), o, d, sun, c);
   } else if (argh.an == 1) {
     col = argh.farbe;
   } else {

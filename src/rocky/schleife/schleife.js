@@ -1,5 +1,6 @@
 import { clamp } from '../logik/zufall.js';
 import { t } from '../../i18n';
+import { zuFrueh } from '../../grafik/menue';
 
 
 // Hauptschleife: Bildgröße, Auflösungs-Automatik (60 fps halten), ein Schritt je Bild, Rückleseprobe für Prüfbilder.
@@ -37,6 +38,7 @@ export function createSchleife(ext) {
     else if (ms < (coarse ? 14 : 11) && ext.dynScale < top) ext.dynScale = Math.min(top, ext.dynScale * 1.08);
   }
   function step(now) {
+    if (zuFrueh(S.fxCap, now, ext.last)) { requestAnimationFrame(step); return; }   // Bildraten-Deckel (Grafik-Option)
     const dt = Math.min(0.1, (now - ext.last) / 1000);
     ext.last = now;
     adaptScale(dt, now);

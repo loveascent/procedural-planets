@@ -1,4 +1,5 @@
 import { TABLE } from '../presets';
+import { KETTE_STANDARD } from '../grafik/menue';
 
 export const isPhone = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820;
 
@@ -96,6 +97,14 @@ export const S = {
   view: 0,
   map: false,
   transparent: false,     // Hintergrund durchsichtig (Gasriese eingebettet in eine andere Szene); aus = wie bisher
+  // Grafik-Optionen „fx…“ (alle aus = wie ohne sie): Bildkette (gemeinsam mit den anderen Seiten) …
+  ...KETTE_STANDARD,
+  // … zeitliche Verfahren, Zwischenbilder, Fovea, Zwischenspeicher, Bildrate (src/gas/grafik/) …
+  fxAlpha: 0.1,           // Anteil des neuen Bildes bei TAA/TAAU (Salvi 2016: 10 %)
+  fxDitherSteps: false, fxPattern: 'off', fxGen: 'off', fxGenN: 2, fxFovea: false, fxFoveaRadius: 0.7, fxFoveaScale: 0.5,
+  fxSkyCache: false, fxBundle: false, fxIdle: false, fxTarget: '60', fxDynIntern: false, fxF16: false,
+  // … und Simulation
+  fxSimRate: '60', fxSimInterp: false, fxSimSplit: false, fxCare: '1', fxBind: false,
 };
 // „Zustand merken“ bleibt über das Neuladen hinweg an (sonst wäre es nach jedem Laden wieder aus)
 try { S.remember = localStorage.getItem('fgp-remember') === '1'; } catch { /* Speicher gesperrt */ }
@@ -152,9 +161,11 @@ export const SIM_FLOATS = OFF_WEIGHT + MAX_STORMS;
 export const RENDER_FLOATS = 16 + 4 * 16;
 // Fester Zeitschritt: Zeitraffer und Einschwingen machen mehr Schritte, nicht größere.
 export const DT = 1 / 60;
-// Vorrechnen beim Start (unsichtbar, hinter dem Ladebild): 20 s Simulationszeit, damit der
-// Planet "mitten im Geschehen" erscheint statt sichtbar bei null anzufangen.
-export const WARM_STEPS = 1200;
+// Kein Vorrechnen („Einschwingen“) mehr: der Planet erscheint sofort, die Strömung entwickelt sich beim Zuschauen.
+// Vorspulen bleibt als Knopf (⏩ 20 s / 60 s / 600 s); #warm=N in der Adresse rechnet für Tests weiter N Schritte vor.
+export const WARM_STEPS = 0;
+// Messschritte beim Start: GPU-Zeit je Simulationsschritt für „60 fps halten“ (vorher beim Einschwingen gemessen)
+export const PROBE_STEPS = 8;
 // Stufen für die automatische Qualität: [Windgitter, Farbauflösung]
 export const AUTO_TIERS: [number, number][] = [[256, 1536], [192, 1024], [128, 768], [128, 512], [96, 384], [64, 256]];
 // Budget für einen Simulationsschritt, damit neben dem Rendern 60 fps bleiben (16,7 ms pro Bild)

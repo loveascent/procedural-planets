@@ -1,5 +1,7 @@
 import { clamp } from '../logik/zufall.js';
 import { lookAt, persp, mul4, inv4, planetMatrix, V } from '../logik/mathe.js';
+import { Kette } from '../../grafik/kette';
+import { ketteAn } from '../../grafik/menue';
 
 
 // Zeichnen eines Bildes: Sonnenrichtung, Uniform-Block füllen, Szene (Planet, Wolken, Himmel) und Nachbild in einen Befehlspuffer.
@@ -47,8 +49,15 @@ export function createZeichnen(ext) {
     u.set([0.35, 0.55, 1.0, S.modRim ? S.rimStr : 0], 172);
     ext.device.queue.writeBuffer(ext.uBuf, 0, u);
   }
+  let kette = null;   // Grafik-Optionen: gibt es nur, solange eine Stufe an ist
   function render(enc) {
-    const w = canvas.width, h = canvas.height;
+    const aus = () => (OFFSCREEN ? RS.outV : ext.context.getCurrentTexture().createView());
+    let stufen = null;
+    if (!ext.ansicht && !OFFSCREEN && ketteAn(S)) {
+      kette ??= new Kette(ext.device);
+      stufen = kette.seite(() => enc, aus, ext.format, canvas.width, canvas.height, S);
+    } else if (kette) { kette.zerstoeren(); kette = null; }
+    const w = stufen ? stufen.w : canvas.width, h = stufen ? stufen.h : canvas.height;
     ensureTargets(w, h);
     updateTrans(enc);
     if (ext.lutDirty) { drawBiome(S.seed, clamp(ext.seaH, 0, 1)); ext.lutDirty = false; }
@@ -146,7 +155,8 @@ export function createZeichnen(ext) {
       });
       for (let i = RS.bloom.length - 1; i > 0; i--) full(RS.bloom[i - 1].v, ext.P.up, RS.bloom[i].gUp, true);
     }
-    full(OFFSCREEN ? RS.outV : ext.context.getCurrentTexture().createView(), ext.P.fin, bloomOn ? RS.pgFin : RS.pgFinNoBloom);
+    full(stufen ? stufen.bild() : aus(), ext.P.fin, bloomOn ? RS.pgFin : RS.pgFinNoBloom);
+    if (stufen) stufen.fertig();
   }
   return { render };
 }
