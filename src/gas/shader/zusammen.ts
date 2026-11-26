@@ -96,12 +96,12 @@ export function fluidCode(v: Varianten): string {
  *  in ganzen 8×8-Kacheln (eine Arbeitsgruppe = eine Kachel, also keine Verzweigung innerhalb einer Gruppe), diese mit n·Δt.
  *  Vorher pflegte jeder n-te Schritt alles auf einmal: gleicher Mittelwert, aber eine Lastspitze alle n Schritte. */
 function farbpflegeSeltener(code: string): string {
-  const alt = '  let dt = S.dt;\n  var c = hook_bandrueck(c0, p, dt);';
+  const alt = '  let dt = S.dt;\n  let z = Z(p);';
   if (!code.includes(alt)) throw new Error('Farbpflege: Stelle fehlt');
   const auf = '  textureStore(dst, id.xy, id.z, vec4f(relaxColor(';
   if (!code.includes(auf)) throw new Error('Farbpflege: Aufruf fehlt');
   return 'var<private> pflegeHier: bool = false;\n' + code
-    .replace(alt, '  if (!pflegeHier) { return c0; }\n  let dt = S.dt * S.mode.z;\n  var c = hook_bandrueck(c0, p, dt);')
+    .replace(alt, '  if (!pflegeHier) { return c0; }\n  let dt = S.dt * S.mode.z;\n  let z = Z(p);')
     .replaceAll(auf, '  pflegeHier = (((id.x >> 3u) + (id.y >> 3u) + id.z) % u32(S.mode.z)) == u32(S.mode.w);\n' + auf);
 }
 
@@ -124,7 +124,7 @@ export function tracerCode(v: Varianten): string {
 export function eintritte(v: Varianten): { fluid: string[]; tracers: string[] } {
   const fluid = ['initVel', 'clear'];
   if (v.fluid) fluid.push('advect', 'curl', 'forces', 'divergence', 'jacobi', 'project', ...(v.jets ? ['zonalClear', 'zonalSum'] : []));
-  const tracers = ['initDye', 'advectDye'];
+  const tracers = ['initDye', 'advectDye', 'pflegeZiel', 'bandLut'];
   if (v.curl) tracers.push('flowField');
   if (v.partikel) tracers.push('moveParticles');
   if (v.weich) tracers.push('blurRelax');

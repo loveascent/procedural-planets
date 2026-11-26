@@ -68,10 +68,16 @@ async function messeSchritt(app: App) {
   // Erst zwei Schritte ungemessen: der allererste enthält das Übersetzen der Shader (iGPU gemessen: 313 ms statt ~25 ms je Schritt)
   app.submitStep(); app.submitStep();
   await app.device.queue.onSubmittedWorkDone();
-  const t0 = performance.now();
-  for (let k = 0; k < PROBE_STEPS; k++) app.submitStep();
-  await app.device.queue.onSubmittedWorkDone();
-  app.stepMs = Math.max(0.01, (performance.now() - t0) / PROBE_STEPS);
+  // Kleinste von drei Messungen: eine fremde Last auf der Grafikkarte (anderer Tab, Messläufe) darf die Automatik nicht
+  // zum Abstufen bringen, denn das senkt die Farbauflösung sichtbar. Die kleinste Zeit ist die, die der Schritt selbst braucht.
+  let best = Infinity;
+  for (let m = 0; m < 3; m++) {
+    const t0 = performance.now();
+    for (let k = 0; k < PROBE_STEPS; k++) app.submitStep();
+    await app.device.queue.onSubmittedWorkDone();
+    best = Math.min(best, (performance.now() - t0) / PROBE_STEPS);
+  }
+  app.stepMs = Math.max(0.01, best);
   if (app.S.autoQuality && !app.calibrated) app.calibrate();
 }
 

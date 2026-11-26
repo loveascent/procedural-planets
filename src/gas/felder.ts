@@ -18,6 +18,14 @@ export function cubeField(a: App, n: number): CubeField {
   };
 }
 
+/** Bandfarben-Tabelle: LUT_N×1, eine Schicht (Format wie die Würfelfelder, damit sie an Bindung 4 beschreibbar ist). */
+export const LUT_N = 4096;
+function tabelle(a: App, n: number): CubeField {
+  const tex = a.device.createTexture({ size: [n, 1, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING });
+  const store = tex.createView({ dimension: '2d-array' });
+  return { tex, n, cube: store, store };
+}
+
 export function allocVel(a: App) {
   felderNeu(a);
   for (const f of [...a.vel, ...a.prs]) f.tex.destroy();
@@ -50,6 +58,9 @@ export function allocDye(a: App) {
   for (const f of a.dye) f.tex.destroy();
   a.device.pushErrorScope('out-of-memory');
   a.dye = [a.cubeField(a.S.dyeRes), a.cubeField(a.S.dyeRes)];
+  a.ziel?.tex.destroy(); a.lut?.tex.destroy();
+  a.ziel = a.cubeField(Math.max(32, a.S.dyeRes >> 3));
+  a.lut = tabelle(a, LUT_N);
   a.device.popErrorScope().then((err) => {
     if (!err || a.S.dyeRes <= 128) return;
     a.S.dyeRes = Math.max(128, (a.S.dyeRes / 2) | 0);

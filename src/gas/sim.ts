@@ -40,8 +40,13 @@ export function writeSim(a: App, dt: number, init = false) {
 /** buf: Puffer an Bindung 5 – Partikel für die Tracer-Shader, Breitenkreis-Mittel für den Fluid-Löser. */
 export function bind(app: App, a: CubeField | null, b: CubeField | null, dst: CubeField, buf: GPUBuffer = app.zonal): GPUBindGroup {
   if (!app.S.fxBind) return neueBindung(app, a, b, dst, buf);
-  return gemerkteBindung(app, [(a ?? app.dummy).tex, (b ?? app.dummy).tex, dst.tex, buf], () => neueBindung(app, a, b, dst, buf));
+  const z = zielFuer(app, dst), l = lutFuer(app, dst);
+  return gemerkteBindung(app, [(a ?? app.dummy).tex, (b ?? app.dummy).tex, dst.tex, buf, z.tex, l.tex], () => neueBindung(app, a, b, dst, buf));
 }
+
+// Ein Feld darf nicht zugleich Ziel (Bindung 4) und Quelle sein: beim Schreiben von Pflege-Ziel/Tabelle dort den Platzhalter binden.
+const zielFuer = (app: App, dst: CubeField) => (app.ziel && dst !== app.ziel ? app.ziel : app.dummy);
+const lutFuer = (app: App, dst: CubeField) => (app.lut && dst !== app.lut ? app.lut : app.dummy);
 
 function neueBindung(app: App, a: CubeField | null, b: CubeField | null, dst: CubeField, buf: GPUBuffer): GPUBindGroup {
   return app.device.createBindGroup({
@@ -55,6 +60,8 @@ function neueBindung(app: App, a: CubeField | null, b: CubeField | null, dst: Cu
       { binding: 5, resource: { buffer: buf } },
       { binding: 6, resource: (a ?? app.dummy).store },
       { binding: 7, resource: (b ?? app.dummy).store },
+      { binding: 8, resource: zielFuer(app, dst).cube },
+      { binding: 9, resource: lutFuer(app, dst).store },
     ],
   });
 }
@@ -108,6 +115,13 @@ export function step(a: App, enc: GPUCommandEncoder) {
   }
 
   const look = a.lookMode();
+  // Pflege-Ziel neu: Band-Mäander-Rauschen auf Farbstoff-Auflösung/8 und die Bandfarben über der Breite (farbstoff.ts).
+  if (look !== 'pure' && a.ziel && a.lut) {
+    a.run2D(pass, 'pflegeZiel', null, null, a.ziel);
+    pass.setPipeline(a.pipes.bandLut);
+    pass.setBindGroup(0, a.bind(null, null, a.lut));
+    pass.dispatchWorkgroups(Math.ceil(a.lut.n / 64));
+  }
   if (look === 'dye') {
     a.run2D(pass, 'advectDye', a.dye[a.dc], flowSrc, a.dye[1 - a.dc]); a.dc = 1 - a.dc;
     pass.end();

@@ -76,6 +76,9 @@ export class App {
   aux!: CubeField;
   div!: CubeField;
   dye: CubeField[] = [];
+  /** Pflege-Ziel (Band-Mäander-Rauschen, Farbstoff-Auflösung/8) und Bandfarben-Tabelle (4096×1), jeden Schritt neu (sim.ts step). */
+  ziel: CubeField | null = null;
+  lut: CubeField | null = null;
   flow!: CubeField;
   dummy: CubeField;
   parts!: GPUBuffer;
@@ -133,6 +136,8 @@ export class App {
         { binding: 5, visibility: C, buffer: { type: 'storage' } },
         { binding: 6, visibility: C, texture: { sampleType: 'float', viewDimension: '2d-array' } },
         { binding: 7, visibility: C, texture: { sampleType: 'float', viewDimension: '2d-array' } },
+        { binding: 8, visibility: C, texture: { sampleType: 'float', viewDimension: 'cube' } },       // Pflege-Ziel (felder.ts allocDye)
+        { binding: 9, visibility: C, texture: { sampleType: 'float', viewDimension: '2d-array' } },   // Bandfarben-Tabelle über der Breite
       ],
     });
     this.buildPipes(false);
