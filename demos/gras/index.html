@@ -1,0 +1,273 @@
+<!doctype html><meta charset="utf-8"><title>GrassGPU</title>
+<link rel=stylesheet href=tokens.css>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{width:100%;height:100%;display:block}
+#p{position:fixed;right:12px;top:12px;width:250px;max-height:calc(100% - 24px);overflow:auto;padding:12px 14px;box-sizing:border-box;border-radius:var(--r);background:oklch(.155 .022 var(--hue)/.78);backdrop-filter:blur(var(--glass-blur));border:1px solid var(--line-2);color:var(--text);font:var(--fs-sm) var(--font)}
+#p h4{margin:12px 0 2px;color:var(--accent);font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase}#p label{display:block;margin:6px 0}
+#p output{float:right;color:var(--text-2);font-family:var(--mono)}#p input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0 0}#p button{float:right;background:var(--surface);color:var(--text);border:1px solid var(--line-2);border-radius:var(--r-xs);padding:2px 8px}
+#g{position:fixed;right:12px;top:12px;z-index:2;display:none;background:var(--surface);color:var(--text);border:1px solid var(--line-2);border-radius:var(--r-xs);padding:4px 10px}
+#h{position:fixed;left:10px;top:8px;color:#fff;font:12px system-ui;text-shadow:0 0 3px #000;white-space:pre}</style>
+<canvas id=c></canvas><div id=h></div>
+<script type=module>
+// Reines WebGPU, eigener Code. Technik nach den Beschreibungen (Ghost of Tsushima / SimonDev / Grassworks-Devlog: Wind aus
+// mehreren Noise-Schichten, die sich gegenseitig verschieben; starke Höhenvariation).
+// Spar-Verfahren: GPU-Culling (Compute) + Indirect Draw, Büschel-Instancing + Index-Buffer, Wind/Höhe 1x je Büschel,
+// Beleuchtung im Vertex- statt Fragment-Shader, 2 Dichte-Ringe (fein nah / grob fern), 2 Halm-LODs, Sky zuletzt (Early-Z), FXAA-artiges Post-AA.
+const COMMON = /* wgsl */`
+struct G { vp:mat4x4f, cam:vec4f, right:vec4f, up:vec4f, fwd:vec4f, k:vec4f, p0:vec4f, p1:vec4f, p2:vec4f, p3:vec4f, p4:vec4f, p5:vec4f, svp:mat4x4f };
+@group(0) @binding(0) var<uniform> g:G;
+const NA=238u; const NB=300u; const CA=.12; const CB=.34; const CAP=146644u; const SC=vec3f(3.0,2.6,2.0);
+fn SUN()->vec3f{ let e=g.p2.z; let a=g.p2.w; return vec3f(sin(a)*cos(e),sin(e),-cos(a)*cos(e)); }
+fn pcg(v:u32)->u32{ let s=v*747796405u+2891336453u; let w=((s>>((s>>28u)+4u))^s)*277803737u; return (w>>22u)^w; }
+fn rnd(c:vec2i,k:u32)->f32{ return f32(pcg(pcg(u32(c.x)^(k*0x9e3779b9u))+u32(c.y)))/4294967296.; }
+fn vn(p:vec2f)->f32{ let i=vec2i(floor(p)); let f=fract(p); let w=f*f*(3.-2.*f);
+  return mix(mix(rnd(i,7u),rnd(i+vec2i(1,0),7u),w.x),mix(rnd(i+vec2i(0,1),7u),rnd(i+vec2i(1,1),7u),w.x),w.y); }
+fn hgt(p:vec2f)->f32{ return 14.*(vn(p*.003)-.5)+5.*(vn(p*.011+17.)-.5)+1.2*(vn(p*.037+5.)-.5); }
+fn u8(h:u32,s:u32)->f32{ return f32((h>>s)&255u)/255.; }          // 1 Hash -> mehrere Zufallszahlen (spart pcg-Aufrufe)
+fn sky(d:vec3f)->vec3f{ let L=SUN(); let h=clamp(d.y,0.,1.);
+  let c=mix(vec3f(1.05,.78,.55),vec3f(.4,.55,.9),pow(h,.35)); let s=max(dot(d,L),0.);
+  return c+vec3f(1.,.7,.4)*(pow(s,6.)*.35+pow(s,300.)*8.); }
+fn tone(x0:vec3f)->vec3f{ let x=x0*g.p2.x; return pow(clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),vec3f(0.),vec3f(1.)),vec3f(1./2.2)); }
+fn finish(c:vec3f,wp:vec3f)->vec4f{ let d=wp-g.cam.xyz; let r=length(d); let dir=d/r;
+  return vec4f(tone(mix(c,sky(normalize(vec3f(dir.x,.02,dir.z))),1.-exp(-pow(r*g.p3.y,2.)))),1.); }
+fn fb(p:vec2f)->f32{ return vn(p)*.55+vn(p*2.)*.28+vn(p*4.)*.14; }
+fn gmean(p:vec2f)->vec3f{ return mix(vec3f(.05,.14,.03),vec3f(.15,.22,.05),vn(p*.03)); }
+fn windAt(p:vec2f)->vec4f{                       // Wind wie GrassWorldgen windGust(): verzerrtes Böen-Noise + Welle + seitlicher Wirbel (Perlin dort, Value-Noise hier)
+  let wd=vec2f(.8,.6); let T=g.cam.w; let sc=.045*g.p0.z; let sp=.8*g.p0.y;
+  let uv0=p*sc-wd*(T*sp);
+  let warp=vec2f(sin(uv0.y*1.7+T*.23),sin(uv0.x*1.3-T*.31))*.35;
+  let gn=vn(uv0+warp)*2.-1.;
+  let ripple=sin(dot(p,wd)*sc*9.-T*sp*5.);
+  let gust=clamp(smoothstep(-.25,.7,gn)*.8+ripple*.2+.1,0.,1.);
+  let ac=vec2f(-wd.y,wd.x);
+  return vec4f(gust,ac*(sin(dot(p,ac)*sc*6.+T*sp*1.7+gn*3.)*.25*gust),gn); }
+struct Cell{ c:vec2i, q:f32 };
+fn cellOf(ii:u32)->Cell{ var q=CB; var n=NB; var j=ii-NA*NA; if(ii<NA*NA){ q=CA; n=NA; j=ii; }   // Ring A: fein+nah, Ring B: grob+fern
+  return Cell(vec2i(floor(g.cam.xz/q))-vec2i(i32(n/2u))+vec2i(i32(j%n),i32(j/n)),q); }
+struct VO{ @builtin(position) pos:vec4f, @location(0) col:vec3f };`;
+
+const RENDER = COMMON + /* wgsl */`
+struct Rec{ a:vec4f, b:vec4f, c:vec4f, d:vec4f };      // je sichtbarem Büschel: Pos,Höhe,Böe | Zelle,Büschelhöhe,Zellgröße | -,-,Patch,Strömungswinkel | Trockenheit,Wirbel
+@group(0) @binding(1) var<storage,read> vis:array<Rec>;
+@group(0) @binding(3) var shT:texture_depth_2d;
+@group(0) @binding(4) var shS:sampler_comparison;
+override FAR:f32=0.;
+struct Geo{ wp:vec3f, t:f32, sx:f32, ft:vec2f, st:vec2f, bd:vec2f, amt:f32, e:f32, dist:f32, R:Rec };
+fn geom(vi:u32,k:u32)->Geo{
+  var o:Geo; let far=FAR>.5; let R=vis[select(0u,CAP,far)+k]; o.R=R;
+  let c=vec2i(i32(R.b.x),i32(R.b.y)); let q=R.b.w; let ns=select(3u,2u,far); let nv=3u*ns+1u;
+  let bi=vi/nv; let lv=vi%nv; let B=bi*8u;
+  let h1=pcg(pcg(u32(c.x)^(B*0x9e3779b9u+1u))+u32(c.y)); let h2=pcg(h1+747796405u); let h3=pcg(h2^0x68e31da4u);
+  let p=R.a.xz+(vec2f(f32(h2&4095u),f32((h2>>12u)&4095u))/4095.-.5)*q*1.2; let gy=R.a.y; let gust=R.a.w;
+  let dist=length(p-g.cam.xz); let dens=clamp(1.-(dist-g.p3.x)/75.,.06,1.)*g.p3.z;
+  let height=.62*g.p1.x*R.b.z*(.55+.9*u8(h1,16u))*(1.-smoothstep(85.,98.,dist));      // heightVariation .45 (Original)
+  let a=f32(h1&65535u)/65536.*6.2832; let f=vec2f(-sin(a),cos(a));
+  let wd=vec2f(.8,.6); let comb=clamp(g.p0.x*.6+.35,0.,.85);                      // Original: comb = windStrength*.6+.35
+  let fa=R.c.w; let fl=vec2f(wd.x*cos(fa)-wd.y*sin(fa),wd.x*sin(fa)+wd.y*cos(fa));   // Strömungsfeld
+  let dd=normalize(mix(f,fl,comb)); let r=u8(h1,24u);
+  let flutter=sin(g.cam.w*(2.5+u8(h3,8u)*2.5)+a*6.)*(gust*.1+.05);
+  let wind=(wd*(gust+.15+flutter)+R.d.yz+f*(flutter*.5))*g.p0.x;
+  let D=dd*(g.p0.w*(r*r*1.5+.25))+wind; let amt=min(length(D),.97);                // Original: droop = curvature*(r^2*1.5+.25)
+  let tip=lv==3u*ns; let t=select(f32(lv/3u)/f32(ns),1.,tip); let sx=select(f32(lv%3u)-1.,0.,tip);
+  let at=a+(u8(h3,16u)-.5)*1.6*t; let ft=vec2f(-sin(at),cos(at)); let st=vec2f(cos(at),sin(at));
+  let w0=.019*g.p1.y*sqrt(q/.22)*(.65+.7*u8(h3,0u))/sqrt(dens); let pxw=2.*max(dist,.2)*g.k.x/g.k.z;
+  let w=max(w0,pxw*.6)*pow(1.-t,.75)*(.72+.28*min(1.,t/.25));                      // Profil: Original; Mindestbreite ~1 Pixel: eigene Zutat
+  let vN=normalize(g.cam.xz-p+vec2f(1e-4)); let edge=pow(1.-abs(dot(vN,ft)),2.);
+  let fold=ft*(-.22*w*(1.-abs(sx)));
+  let off=st*sx*w+vec2f(-vN.y,vN.x)*sx*w*g.p1.w*edge+fold+(D/max(length(D),1e-4))*amt*t*t*height;
+  o.wp=vec3f(p.x+off.x,gy+t*height*sqrt(1.-amt*amt),p.y+off.y);
+  o.t=t; o.sx=sx; o.ft=ft; o.st=st; o.bd=D/max(length(D),1e-4); o.amt=amt; o.e=u8(h2,24u); o.dist=dist; return o; }
+fn shadow(wp:vec3f)->f32{ let s=g.svp*vec4f(wp,1.); let uv=vec2f(s.x*.5+.5,.5-s.y*.5);
+  if(uv.x<0.||uv.x>1.||uv.y<0.||uv.y>1.){ return 1.; }
+  return textureSampleCompareLevel(shT,shS,uv,s.z-.0002); }
+@vertex fn gvs_sh(@builtin(vertex_index) vi:u32,@builtin(instance_index) k:u32)->@builtin(position) vec4f{ return g.svp*vec4f(geom(vi,k).wp,1.); }
+@vertex fn gvs(@builtin(vertex_index) vi:u32,@builtin(instance_index) k:u32)->VO{
+  var o:VO; let G=geom(vi,k); let wp=G.wp; let t=G.t; let sx=G.sx; let R=G.R;
+  o.pos=g.vp*vec4f(wp,1.); let far01=smoothstep(12.,70.,G.dist);                 // Original: smoothstep(12,70,dist)
+  let wd=vec2f(.8,.6); let L=SUN(); let V=normalize(g.cam.xyz-wp); let gust=R.a.w;
+  // Normale wie im Original: gefaltet (Mittelrippe), 40 % Mischung mit "oben + Windneigung"
+  let facing3=normalize(vec3f(G.ft.x,dot(G.ft,G.bd)*G.amt*t*1.5,G.ft.y)); let side3=vec3f(G.st.x,0.,G.st.y);
+  var fo=normalize(facing3-side3*(sx*.6)); if(dot(fo,V)<0.){ fo=-fo; }
+  let tilt=vec3f(wd.x,0.,wd.y)*(gust*g.p0.x*.9);
+  var n=normalize(mix(fo,vec3f(0.,1.,0.)+tilt,.4)); n=normalize(mix(n,vec3f(0.,1.,0.),far01*.7));
+  // Farbe wie im Original: Verlauf, Variation (nur nah), Feld-Helligkeit, trockene Flecken, Windaufhellung, Fuß-Verdunklung
+  let wsd=g.p0.x; var c=mix(g.p4.xyz,g.p5.xyz,pow(t,1.2))*(1.+(G.e-.5)*2.*.14*(1.-far01));
+  c=c*(1.+R.c.z*.45*.7); c=mix(c,c*vec3f(1.3,1.12,.55),smoothstep(.05,.55,R.d.x)*.45);
+  c=c*(1.+gust*wsd*.5*t); c=c*mix(mix(.32,.7,far01),1.,smoothstep(0.,.75,t));
+  let vis=mix(shadow(wp),1.,far01);                                              // Sonnen-Schattenwurf (Shadow-Map), nur nah
+  let diff=max(dot(n,L),0.); let amb=mix(vec3f(.12,.10,.07),vec3f(.2,.32,.48),n.y*.5+.5);   // Himmels-Umgebungslicht (Original: IBL aus dem Himmel)
+  let nh=max(dot(n,normalize(L+V)),0.);
+  let back=pow(max(dot(V,-L),0.),4.)*g.p2.y*t*t*.45;                              // Original: Durchscheinen, emissive
+  let alb2=mix(g.p4.xyz,g.p5.xyz,t);
+  let col=c*(SC*diff*vis+amb)+alb2*SC*back+SC*pow(nh,12.)*.1*t*vis*(1.-far01);
+  let colF=mix(g.p4.xyz,g.p5.xyz,.45)*(SC*max((L.y+.4)/1.4,0.)+vec3f(.1,.13,.17))*.45;  // mittlere Feldfarbe (eigene Zutat)
+  o.col=finish(mix(col,colF,far01*.8),wp).rgb; return o; }
+
+@vertex fn bvs(@builtin(vertex_index) vi:u32)->VO{                                     // indiziertes grobes Gitter: 26k statt 393k Vertices
+  var o:VO; let GS=5.6; let p=floor(g.cam.xz/GS)*GS-80.*GS+vec2f(f32(vi%161u),f32(vi/161u))*GS;
+  let h0=hgt(p); let wp=vec3f(p.x,h0,p.y); o.pos=g.vp*vec4f(wp,1.);
+  let n=normalize(vec3f(h0-hgt(p+vec2f(1.,0.)),1.,h0-hgt(p+vec2f(0.,1.)))); let L=SUN(); let d=length(wp-g.cam.xyz);
+  let alb=mix(g.p4.xyz*mix(.65,.95,vn(p*.35)*vn(p*2.7)),gmean(p)*.8,smoothstep(50.,110.,d));   // Original: baseColor*(.65..95)             // neutraler Boden, fern = mittlere Grasfarbe
+  o.col=finish(alb*(SC*max(dot(n,L),0.)*.4+mix(vec3f(.12,.10,.07),vec3f(.28,.4,.62),n.y*.5+.5)),wp).rgb; return o; }
+@fragment fn pfs(i:VO)->@location(0) vec4f{ return vec4f(i.col,1.); }
+
+struct SO{ @builtin(position) pos:vec4f, @location(0) nd:vec2f };
+@vertex fn svs(@builtin(vertex_index) vi:u32)->SO{ let x=vec2f(f32((vi<<1u)&2u),f32(vi&2u))*2.-1.; return SO(vec4f(x,1.,1.),x); }
+@fragment fn sfs(i:SO)->@location(0) vec4f{
+  let d=normalize(g.fwd.xyz+i.nd.x*g.k.y*g.k.x*g.right.xyz+i.nd.y*g.k.x*g.up.xyz); let L=SUN();
+  var x=sky(d);
+  if(d.y>0.){ let u=d.xz/(d.y+.12)*.7+vec2f(g.cam.w*.01,0.); let f=fb(u*1.6); let fl=fb(u*1.6+L.xz*.12);   // Wolken
+    let cl=smoothstep(.6,.8,f)*smoothstep(0.,.1,d.y); x=mix(x,mix(vec3f(.72,.76,.86),vec3f(1.5,1.4,1.25),clamp((f-fl)*5.+.55,0.,1.)),cl*.97); }
+  return vec4f(tone(x),1.); }`;
+
+const COMPUTE = COMMON + /* wgsl */`
+struct Rec{ a:vec4f, b:vec4f, c:vec4f, d:vec4f };
+@group(0) @binding(1) var<storage,read_write> vis:array<Rec>;
+@group(0) @binding(2) var<storage,read_write> ind:array<atomic<u32>,10>;
+@compute @workgroup_size(64) fn cull(@builtin(global_invocation_id) id:vec3u){      // jeder Thread = ein Büschel (4 Halme)
+  if(id.x>=CAP){ return; }
+  let ce=cellOf(id.x); let c=ce.c; let p=(vec2f(c)+vec2f(rnd(c,4u),rnd(c,5u)))*ce.q;
+  let dd=p-g.cam.xz; let dist=length(dd);
+  if(ce.q>CB*.5&&max(abs(dd.x),abs(dd.y))<f32(NA)*CA*.5-.3){ return; }               // Ring B nicht dort, wo Ring A liegt
+  let dens=clamp(1.-(dist-g.p3.x)/75.,.06,1.)*g.p3.z;
+  if(rnd(c,3u)>dens||dist>100.){ return; }                                          // Distanz-Ausdünnung
+  let gy=hgt(p); let rc=g.vp*vec4f(p.x,gy,p.y,1.);
+  if(rc.w<-.3||abs(rc.x)>rc.w*1.35+1.){ return; }                                  // Frustum-Culling
+  let wv=windAt(p);                                                                // Wind, Patches, Büschel nur 1x je Büschel
+  let cc=vec2i(floor(p/1.7)); let cd=length(p-(vec2f(cc)+vec2f(rnd(cc,10u),rnd(cc,11u)))*1.7)/1.7;
+  let ch=mix(1.,mix(.5,1.25,rnd(cc,12u))*(1.1-.4*cd),g.p1.z);
+  let rec=Rec(vec4f(p.x,gy,p.y,wv.x),vec4f(f32(c.x),f32(c.y),ch,ce.q),vec4f(0.,0.,vn(p*.03)-.5,vn(p*.025+9.)*2.2-1.1),vec4f(vn(p*.012+3.),wv.y,wv.z,0.));
+  if(dist<g.p3.w){ let k=atomicAdd(&ind[1],1u); vis[k]=rec; } else { let k=atomicAdd(&ind[6],1u); vis[CAP+k]=rec; }
+}`;
+
+const POST = /* wgsl */`
+@group(0) @binding(0) var tex:texture_2d<f32>;
+@vertex fn v(@builtin(vertex_index) vi:u32)->@builtin(position) vec4f{ return vec4f(vec2f(f32((vi<<1u)&2u),f32(vi&2u))*2.-1.,0.,1.); }
+fn L(c:vec3f)->f32{ return dot(c,vec3f(.299,.587,.114)); }
+@fragment fn f(@builtin(position) p:vec4f)->@location(0) vec4f{                       // kantenbewusstes Weichzeichnen (FXAA-artig)
+  let i=vec2i(p.xy); let c=textureLoad(tex,i,0).rgb;
+  let n=textureLoad(tex,i+vec2i(0,-1),0).rgb; let s=textureLoad(tex,i+vec2i(0,1),0).rgb;
+  let e=textureLoad(tex,i+vec2i(1,0),0).rgb;  let w=textureLoad(tex,i+vec2i(-1,0),0).rgb;
+  let lo=min(L(c),min(min(L(n),L(s)),min(L(e),L(w)))); let hi=max(L(c),max(max(L(n),L(s)),max(L(e),L(w))));
+  return vec4f(mix(c,(c*2.+n+s+e+w)/6.,clamp(max((hi-lo-.03)*4.,.55),0.,.8)),1.); }`;
+
+const cv=document.getElementById('c'), hud=document.getElementById('h'), F=new URLSearchParams(location.search);
+const ad=await navigator.gpu.requestAdapter(), ts=ad.features.has('timestamp-query');
+const dev=await ad.requestDevice({requiredFeatures:ts?['timestamp-query']:[]}), ctx=cv.getContext('webgpu');
+const fmt=navigator.gpu.getPreferredCanvasFormat(); ctx.configure({device:dev,format:fmt,alphaMode:'opaque'});
+dev.addEventListener?.('uncapturederror',e=>console.error('GPU:',e.error.message));
+const mod=dev.createShaderModule({code:RENDER}), cmod=dev.createShaderModule({code:COMPUTE}), pmod=dev.createShaderModule({code:POST});
+const mk=(vs,fs,topology,depth,constants,cmp)=>dev.createRenderPipeline({layout:'auto',vertex:{module:mod,entryPoint:vs,constants},
+  fragment:{module:mod,entryPoint:fs,targets:[{format:fmt}],constants},primitive:{topology,cullMode:'none'},
+  depthStencil:{format:'depth24plus',depthWriteEnabled:depth,depthCompare:cmp||'less'},multisample:{count:4}});
+const ub=dev.createBuffer({size:320,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+const vis=dev.createBuffer({size:2*146644*64,usage:GPUBufferUsage.STORAGE});
+const ind=dev.createBuffer({size:40,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.INDIRECT|GPUBufferUsage.COPY_DST});
+const cp=dev.createComputePipeline({layout:'auto',compute:{module:cmod,entryPoint:'cull'}});
+const PP=dev.createRenderPipeline({layout:'auto',vertex:{module:pmod,entryPoint:'v'},fragment:{module:pmod,entryPoint:'f',targets:[{format:fmt}]}});
+const bg=(pl,...b)=>dev.createBindGroup({layout:pl.getBindGroupLayout(0),entries:b.map((buffer,binding)=>({binding,resource:{buffer}}))});
+const mkIB=ns=>{ const a=[],nv=3*ns+1; for(let b=0;b<4;b++){ const o=b*nv; for(let r=1;r<ns;r++){ const q=o+(r-1)*3; a.push(q,q+1,q+3,q+1,q+4,q+3,q+1,q+2,q+4,q+2,q+5,q+4); } const q=o+(ns-1)*3; a.push(q,q+1,o+3*ns,q+1,q+2,o+3*ns); }
+  const buf=dev.createBuffer({size:a.length*2,usage:GPUBufferUsage.INDEX,mappedAtCreation:true}); new Uint16Array(buf.getMappedRange()).set(a); buf.unmap(); return buf; };
+const IB=[mkIB(3),mkIB(2)];                                           // Büschel = 4 Halme je 7 (nah) bzw. 5 (fern) Vertices, indiziert
+const GN_=mk('gvs','pfs','triangle-list',true,{FAR:0}), GF_=mk('gvs','pfs','triangle-list',true,{FAR:1});
+const BP=mk('bvs','pfs','triangle-list',true), SP=mk('svs','sfs','triangle-list',false,undefined,'less-equal');   // Sky zuletzt, nur wo nichts verdeckt (Early-Z)
+const gi=[]; for(let z=0;z<160;z++)for(let x=0;x<160;x++){ const i=z*161+x; gi.push(i,i+1,i+161,i+1,i+162,i+161); }
+const GIB=dev.createBuffer({size:gi.length*4,usage:GPUBufferUsage.INDEX,mappedAtCreation:true}); new Uint32Array(GIB.getMappedRange()).set(gi); GIB.unmap();
+const SH=dev.createTexture({size:[2048,2048],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING}), SHV=SH.createView();
+const SMP=dev.createSampler({compare:'less',magFilter:'linear',minFilter:'linear'});
+const mkS=(far)=>dev.createRenderPipeline({layout:'auto',vertex:{module:mod,entryPoint:'gvs_sh',constants:{FAR:far}},primitive:{topology:'triangle-list',cullMode:'none'},
+  depthStencil:{format:'depth32float',depthWriteEnabled:true,depthCompare:'less',depthBias:2,depthBiasSlopeScale:2}});
+const SGN=mkS(0), SGF=mkS(1), SB2=[bg(SGN,ub,vis),bg(SGF,ub,vis)];
+const bg4=(pl)=>dev.createBindGroup({layout:pl.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:ub}},{binding:1,resource:{buffer:vis}},{binding:3,resource:SHV},{binding:4,resource:SMP}]});
+const GB=[bg4(GN_),bg4(GF_)], CB=bg(cp,ub,vis,ind), BB=bg(BP,ub), SB=bg(SP,ub);
+const qs=ts?dev.createQuerySet({type:'timestamp',count:6}):null;
+const qb=ts?dev.createBuffer({size:48,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC}):null, rb=ts?dev.createBuffer({size:48,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST}):null;
+const tw=(i)=>ts?{timestampWrites:{querySet:qs,beginningOfPassWriteIndex:i,endOfPassWriteIndex:i+1}}:{};
+
+// Terrain auch auf der CPU (identisch zum Shader) für die Kamera
+const pcg=v=>{ const s=(Math.imul(v,747796405)+2891336453)>>>0; const w=Math.imul(((s>>>((s>>>28)+4))^s)>>>0,277803737)>>>0; return ((w>>>22)^w)>>>0; };
+const rn=(x,z,k)=>pcg((pcg(((x>>>0)^Math.imul(k,0x9e3779b9))>>>0)+(z>>>0))>>>0)/4294967296;
+const vn=(x,z)=>{ const ix=Math.floor(x),iz=Math.floor(z),fx=x-ix,fz=z-iz,u=fx*fx*(3-2*fx),v=fz*fz*(3-2*fz);
+  const a=rn(ix,iz,7),b=rn(ix+1,iz,7),c=rn(ix,iz+1,7),d=rn(ix+1,iz+1,7); return (a+(b-a)*u)*(1-v)+(c+(d-c)*u)*v; };
+const hgt=(x,z)=>14*(vn(x*.003,z*.003)-.5)+5*(vn(x*.011+17,z*.011+17)-.5)+1.2*(vn(x*.037+5,z*.037+5)-.5);
+
+let pos=[0,hgt(0,20)+1.4,20], yaw=0, pitch=-.1, speed=3, ratio=Math.max(1,Math.min(devicePixelRatio,1.5)), maxRatio=ratio, msaa, depth, scene, pbg;
+const keys=new Set(); addEventListener('keydown',e=>keys.add(e.code)); addEventListener('keyup',e=>keys.delete(e.code));
+addEventListener('wheel',e=>speed=Math.min(80,Math.max(.5,speed*(e.deltaY<0?1.15:.87))));
+cv.addEventListener('pointermove',e=>{ if(e.buttons){ yaw+=e.movementX*.003; pitch=Math.max(-1.5,Math.min(1.5,pitch-e.movementY*.003)); } });
+function size(){ cv.width=Math.floor(innerWidth*ratio); cv.height=Math.floor(innerHeight*ratio); msaa?.destroy(); depth?.destroy(); scene?.destroy();
+  const u={size:[cv.width,cv.height],usage:GPUTextureUsage.RENDER_ATTACHMENT};
+  msaa=dev.createTexture({...u,sampleCount:4,format:fmt}); depth=dev.createTexture({...u,sampleCount:4,format:'depth24plus'});
+  scene=dev.createTexture({size:[cv.width,cv.height],format:fmt,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
+  pbg=dev.createBindGroup({layout:PP.getBindGroupLayout(0),entries:[{binding:0,resource:scene.createView()}]}); }
+addEventListener('resize',size); size();
+// ---- Optionsmenü (Optik: Atrium-Tokens) ----
+const DEF=[['Wind',[['wind','Stärke',0,1.2,.01,.45],['wspeed','Tempo',0,3,.01,1],['wscale','Wellen-Frequenz',.2,3,.01,1],['droop','Durchhängen',0,2,.01,.5]]],
+ ['Gras',[['height','Höhe',.3,2.5,.01,.8],['width','Breite',.3,3,.01,1.6],['clump','Büschel',0,1,.01,1],['thick','Sicht-Verdickung',0,1.5,.01,.6],['lod','Ausdünnen ab (m)',5,80,1,40],['q','Dichte',.1,1,.05,1],['far','Fern-LOD ab (m)',10,90,1,30]]],
+ ['Licht',[['elev','Sonnenhöhe °',3,80,1,28],['az','Sonnenrichtung °',-180,180,1,19],['exp','Belichtung',.3,2,.01,.6],['trans','Gegenlicht',0,3,.01,.7],['fog','Dunst',.5,10,.1,3.2]]],
+ ['Grafik',[['ratio','Auflösung (x)',.5,2,.25,maxRatio]]]];
+const hex=l=>'#'+l.map(v=>Math.round(255*Math.min(1,v**(1/2.2))).toString(16).padStart(2,'0')).join('');
+const lin=h=>[1,3,5].map(i=>(parseInt(h.slice(i,i+2),16)/255)**2.2);
+const S={}, sv=JSON.parse(localStorage.grassgpu15||'{}'); DEF.forEach(([,r])=>r.forEach(d=>S[d[0]]=sv[d[0]]??d[5]));
+S.base=sv.base??'#29440f'; S.tip=sv.tip??'#78b92a';   // Grassworks-Doku: baseColor/tipColor S.auto=sv.auto??false; maxRatio=ratio=S.ratio; size();
+const pn=document.createElement('div'); pn.id='p';
+pn.innerHTML='<b>Gras · Optionen</b><button id=rs>Reset</button>'+DEF.map(([g,r])=>`<h4>${g}</h4>`+r.map(([k,l,a,b,st])=>`<label>${l}<output></output><input type=range data-k=${k} min=${a} max=${b} step=${st}></label>`).join('')).join('')
+ +'<h4>Farbe</h4><label>Halm-Fuß <input type=color data-c=base></label><label>Halm-Spitze <input type=color data-c=tip></label><label><input type=checkbox data-a> Auflösung automatisch (nur Auflösung)</label><label style="color:var(--text-2)">H = Menü ein/aus</label>';
+document.body.append(pn); const tg=document.createElement('button'); tg.id='g'; tg.textContent='⚙'; document.body.append(tg);
+const show=()=>pn.querySelectorAll('[data-k]').forEach(i=>{ i.value=S[i.dataset.k]; i.previousElementSibling.textContent=(+S[i.dataset.k]).toFixed(2); });
+show(); pn.querySelectorAll('[data-c]').forEach(i=>i.value=S[i.dataset.c]); pn.querySelector('[data-a]').checked=S.auto;
+pn.addEventListener('input',e=>{ const i=e.target;
+  if(i.dataset.k){ S[i.dataset.k]=+i.value; i.previousElementSibling.textContent=(+i.value).toFixed(2); if(i.dataset.k==='ratio'){ maxRatio=ratio=S.ratio; size(); } }
+  else if(i.dataset.c) S[i.dataset.c]=i.value; else S.auto=i.checked; localStorage.grassgpu15=JSON.stringify(S); });
+pn.querySelector('#rs').onclick=()=>{ localStorage.removeItem('grassgpu15'); location.reload(); };
+const tgl=()=>{ pn.hidden=!pn.hidden; tg.style.display=pn.hidden?'block':'none'; }; tg.onclick=tgl; addEventListener('keydown',e=>{ if(e.code==='KeyH') tgl(); });
+
+const mul=(a,b)=>{ const o=new Float32Array(16); for(let c=0;c<4;c++)for(let r=0;r<4;r++){ let s=0; for(let k=0;k<4;k++)s+=a[k*4+r]*b[c*4+k]; o[c*4+r]=s; } return o; };
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const norm=v=>{ const l=Math.hypot(...v); return v.map(x=>x/l); }, cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+function sunVP(){                                                     // Sonnen-Shadow-Map: Ortho-Kamera von der Sonne, folgt der Kamera, auf Texel gerastet
+  const e=S.elev*Math.PI/180, a=S.az*Math.PI/180, sd=[Math.sin(a)*Math.cos(e),Math.sin(e),-Math.cos(a)*Math.cos(e)], fw=sd.map(x=>-x);
+  const r=norm(cross(fw,Math.abs(sd[1])>.99?[0,0,1]:[0,1,0])), u=cross(r,fw), H=30, tx=2*H/2048;
+  let c=[pos[0],pos[1]-1,pos[2]]; const sr=Math.round(dot(c,r)/tx)*tx-dot(c,r), su=Math.round(dot(c,u)/tx)*tx-dot(c,u);
+  c=c.map((v,i)=>v+r[i]*sr+u[i]*su); const eye=c.map((v,i)=>v+sd[i]*120), n=1, f=260;
+  return mul([1/H,0,0,0, 0,1/H,0,0, 0,0,-1/(f-n),0, 0,0,-n/(f-n),1],[r[0],u[0],sd[0],0, r[1],u[1],sd[1],0, r[2],u[2],sd[2],0, -dot(r,eye),-dot(u,eye),-dot(sd,eye),1]); }
+let last=performance.now(), fr=0, t0=last, peak=0, adj=0, nf=0, busy=false, gpu=null; const ud=new Float32Array(80);
+(function loop(now){ requestAnimationFrame(loop);
+  const dt=Math.min((now-last)/1000,.1); last=now;
+  const fwd=[Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch)], right=[Math.cos(yaw),0,Math.sin(yaw)];
+  const up=[right[1]*fwd[2]-right[2]*fwd[1],right[2]*fwd[0]-right[0]*fwd[2],right[0]*fwd[1]-right[1]*fwd[0]], k=speed*dt;
+  const m=(c,v,s)=>{ if(keys.has(c)) for(let i=0;i<3;i++)pos[i]+=v[i]*s; };
+  m('KeyW',fwd,k); m('KeyS',fwd,-k); m('KeyD',right,k); m('KeyA',right,-k); m('KeyE',[0,1,0],k); m('KeyQ',[0,1,0],-k);
+  pos[1]=Math.max(pos[1],hgt(pos[0],pos[2])+.4);
+  const asp=cv.width/cv.height, f=1/Math.tan(.5), n=.05, fa=1500, b=[-fwd[0],-fwd[1],-fwd[2]];
+  const Pm=[f/asp,0,0,0, 0,f,0,0, 0,0,fa/(n-fa),-1, 0,0,n*fa/(n-fa),0];
+  const V=[right[0],up[0],b[0],0, right[1],up[1],b[1],0, right[2],up[2],b[2],0, -dot(right,pos),-dot(up,pos),-dot(b,pos),1];
+  ud.set(mul(Pm,V),0); ud.set([...pos,now/1000, ...right,0, ...up,0, ...fwd,0, Math.tan(.5),asp,cv.height,0],16);
+  ud.set([S.wind,S.wspeed,S.wscale,S.droop,S.height,S.width,S.clump,S.thick,S.exp,S.trans,S.elev*Math.PI/180,S.az*Math.PI/180,S.lod,S.fog/1000,S.q,S.far,...lin(S.base),0,...lin(S.tip),0],36);
+  ud.set(sunVP(),60);
+  dev.queue.writeBuffer(ub,0,ud);
+  dev.queue.writeBuffer(ind,0,new Uint32Array([120,0,0,0,0,72,0,0,0,0]));
+  const enc=dev.createCommandEncoder();
+  const cpass=enc.beginComputePass(tw(0)); cpass.setPipeline(cp); cpass.setBindGroup(0,CB); cpass.dispatchWorkgroups(Math.ceil(146644/64)); cpass.end();
+  const sp=enc.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:SHV,depthClearValue:1,depthLoadOp:'clear',depthStoreOp:'store'}});   // Schatten-Pass (nur Halme)
+  sp.setPipeline(SGN); sp.setBindGroup(0,SB2[0]); sp.setIndexBuffer(IB[0],'uint16'); sp.drawIndexedIndirect(ind,0);
+  sp.setPipeline(SGF); sp.setBindGroup(0,SB2[1]); sp.setIndexBuffer(IB[1],'uint16'); sp.drawIndexedIndirect(ind,20); sp.end();
+  const pass=enc.beginRenderPass({colorAttachments:[{view:msaa.createView(),resolveTarget:scene.createView(),loadOp:'clear',storeOp:'discard',clearValue:[0,0,0,1]}],
+    depthStencilAttachment:{view:depth.createView(),depthClearValue:1,depthLoadOp:'clear',depthStoreOp:'discard'},...tw(2)});
+  if(!F.has('nograss')){
+    pass.setPipeline(GN_); pass.setBindGroup(0,GB[0]); pass.setIndexBuffer(IB[0],'uint16'); pass.drawIndexedIndirect(ind,0);    // nahe Büschel
+    pass.setPipeline(GF_); pass.setBindGroup(0,GB[1]); pass.setIndexBuffer(IB[1],'uint16'); pass.drawIndexedIndirect(ind,20); } // ferne Büschel
+  if(!F.has('noground')){ pass.setPipeline(BP); pass.setBindGroup(0,BB); pass.setIndexBuffer(GIB,'uint32'); pass.drawIndexed(160*160*6); }                                // Boden nach dem Gras: Early-Z spart verdeckte Pixel
+  if(!F.has('nosky')){ pass.setPipeline(SP); pass.setBindGroup(0,SB); pass.draw(3); }
+  pass.end();
+  const post=enc.beginRenderPass({colorAttachments:[{view:ctx.getCurrentTexture().createView(),loadOp:'clear',storeOp:'store'}],...tw(4)});
+  post.setPipeline(PP); post.setBindGroup(0,pbg); post.draw(3); post.end();
+  const rd=ts&&!busy&&++nf%20===0; if(rd){ enc.resolveQuerySet(qs,0,6,qb,0); enc.copyBufferToBuffer(qb,0,rb,0,48); }
+  dev.queue.submit([enc.finish()]); window.__ok=(window.__ok|0)+1;
+  if(rd){ busy=true; rb.mapAsync(GPUMapMode.READ).then(()=>{ const t=new BigUint64Array(rb.getMappedRange().slice(0)); rb.unmap(); busy=false;
+    window.__gpu=gpu={c:+(Number(t[1]-t[0])/1e6).toFixed(2),r:+(Number(t[3]-t[2])/1e6).toFixed(2),p:+(Number(t[5]-t[4])/1e6).toFixed(2)}; }); }
+  fr++; if(now-t0>500){ const fps=fr*1000/(now-t0); peak=Math.max(peak*.999,fps); fr=0; t0=now;
+    if(S.auto&&now-adj>2000){                                       // automatisch nur die Auflösung
+      if(fps<55&&ratio>1){ ratio-=.25; size(); adj=now; } else if(fps>peak*.95&&ratio<maxRatio&&now-adj>8000){ ratio+=.25; size(); adj=now; } }
+    window.__fps=fps; hud.textContent=`WebGPU pur · ${fps.toFixed(0)} fps · ${ratio.toFixed(2)}x`+(gpu?` · GPU ms: Compute ${gpu.c} · Szene ${gpu.r} · Post ${gpu.p}`:'')+`\nRMB/LMB ziehen = umschauen · WASD/QE · Rad = Tempo`; }
+})(performance.now());
+</script>

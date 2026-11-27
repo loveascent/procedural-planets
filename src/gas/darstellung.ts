@@ -113,6 +113,24 @@ export function helligkeit(app: App, enc: GPUCommandEncoder, dye: CubeField): GP
   return h.cube;
 }
 
+/** Bindungen der Darstellung für die gezeigten Felder; himmel nur mit zwischengespeichertem Himmel (Bindung 7). */
+export function bildBindung(app: App, bild: { dye: CubeField; flow: CubeField; prs: CubeField }, hell: GPUTextureView, himmel: GPUTextureView | null = null): GPUBindGroup {
+  return app.device.createBindGroup({
+    layout: app.renderPipe.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: app.renderBuf } },
+      { binding: 1, resource: app.sampler },
+      { binding: 2, resource: bild.dye.cube },
+      { binding: 3, resource: bild.flow.cube },
+      { binding: 4, resource: app.aux.cube },
+      { binding: 5, resource: bild.prs.cube },
+      { binding: 6, resource: app.sky.view },
+      ...(himmel ? [{ binding: 7, resource: himmel }] : []),
+      { binding: 8, resource: hell },
+    ],
+  });
+}
+
 /** Ein Bild: Simulationsschritt(e) und Darstellung. */
 export function frameOnce(app: App, real: number) {
   const ov = app.ansicht;
@@ -138,7 +156,7 @@ export function frameOnce(app: App, real: number) {
   }
   app.achieved = app.achieved * 0.97 + (real > 0 ? (n * app.dtStep() / real) : 0) * 0.03;
   // Sichtbare Drehung in Simulationszeit: Zeitraffer beschleunigt Wolken und Drehung gleich.
-  app.spin += n * app.dtStep() * 0.08 * app.S.spinSpeed * (9.93 / app.preset.rotationHours) * app.dir();
+  app.spin += n * app.dtStep() * drehrate(app);
   if (grafikNoetig(app.S)) { zeichneGrafik(app, flowSrc); return; }
   grafikAus(app);
   const bild = gezeigt(app, flowSrc);
@@ -146,19 +164,7 @@ export function frameOnce(app: App, real: number) {
   app.sky.tick(enc);
   app.writeRender();
 
-  const rbg = app.device.createBindGroup({
-    layout: app.renderPipe.getBindGroupLayout(0),
-    entries: [
-      { binding: 0, resource: { buffer: app.renderBuf } },
-      { binding: 1, resource: app.sampler },
-      { binding: 2, resource: bild.dye.cube },
-      { binding: 3, resource: bild.flow.cube },
-      { binding: 4, resource: app.aux.cube },
-      { binding: 5, resource: bild.prs.cube },
-      { binding: 6, resource: app.sky.view },
-      { binding: 8, resource: helligkeit(app, enc, bild.dye) },
-    ],
-  });
+  const rbg = bildBindung(app, bild, helligkeit(app, enc, bild.dye));
   const rp = enc.beginRenderPass({
     colorAttachments: [{ view: app.targetView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, app.S.transparent ? 0 : 1] }],
   });

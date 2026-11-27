@@ -9,10 +9,15 @@ fn tuvOf(uv: vec2f) -> vec2f { return vec2f(uv.x, 1.0 - uv.y); }
 fn ign(p: vec2f) -> f32 { return fract(52.9829189 * fract(dot(p, vec2f(0.06711056, 0.00583715)))); }
 @fragment fn fsComp(vin: VO) -> @location(0) vec4f {
   var col = textureSampleLevel(tSrc, samp, tuvOf(vin.uv), 0.0).rgb;
-  let w = U.ivp * vec4f(vin.uv * 2.0 - 1.0, 1.0, 1.0);
+  let w = U.ivp * vec4f(vin.uv * 2.0 - 1.0, 0.0, 1.0);   // Tiefe 0 = ferne Ebene (umgekehrte Tiefe)
   let cam = U.cam.xyz;
   let sun = U.sun.xyz;
   let dir = normalize(w.xyz / w.w - cam);
+  // Bodennähe: Abstand zur Szene aus der umgekehrten Tiefe d = n(f − D)/((f − n)D) → D = n·f/(d(f − n) + n) (Blickachse), t = D / (dir·vorn)
+  if (U.Tf.z > 0.5) {
+    let dz = textureLoad(tTiefe, vec2i(vin.pos.xy), 0);
+    if (dz > 0.0) { luftEnde = U.Tf.x * U.Tf.y / (dz * (U.Tf.y - U.Tf.x) + U.Tf.x) / max(dot(dir, U.Fw.xyz), 1e-4); }
+  }
   let b = dot(cam, dir);
   let c2 = dot(cam, cam);
   col = hook_saum(col, cam, dir, b, c2, sun);

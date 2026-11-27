@@ -31,7 +31,9 @@ import { GEN } from './shader/gen.js';
 import { CLOUDGEN } from './shader/cloudgen.js';
 import { TRANS } from './shader/trans.js';
 import { MIP } from './shader/mip.js';
-import { UDECL } from './shader/udecl.js';
+import { UDECL, U_FLOATS } from './shader/udecl.js';
+import { NAH, NAH_AUS } from './shader/nah.js';
+import { GRAS, GRAS_AUS } from './shader/gras.js';
 import { ATMO, ATMO_AUS, ATMO_POST, ATMO_POST_AUS } from './shader/atmo.js';
 import { SCENE } from './shader/scene.js';
 import { POST } from './shader/post.js';
@@ -144,9 +146,9 @@ const VF = 3;          // GPUShaderStage.VERTEX | FRAGMENT
 const mipLevels = (n) => Math.floor(Math.log2(n)) + 1;
 const J_SLOTS = 1024, J_STRIDE = 256;
 let jBuf, jSlot = 0;
-let uBuf, uData = new Float32Array(204), dPlanet, dCloud, ppDummy, samp;
+let uBuf, uData = new Float32Array(U_FLOATS), dPlanet, dCloud, ppDummy, samp;
 
-const { initGPU, makeLayouts, startPipelines, neueVarianten } = createGpuStart({ fail, OFFSCREEN, kopflos, canvas, S, VF, COMMON, NOISE, GEN, CLOUDGEN, SKY_GEN_WGSL, TRANS, MIP, UDECL, TEXH, VOLC, VOLC_AUS, HYDRO_WARP, WELLEN, WELLEN_AUS, ATMO, ATMO_AUS, ATMO_POST, ATMO_POST_AUS, BLOOM, BLOOM_AUS, FLARE, FLARE_AUS, SCHATTEN, SCHATTEN_AUS, SAUM, SAUM_AUS, EROSION, EROSION_AUS, FLUSS_GEN, FLUSS_GEN_AUS, FLUSS_SZENE, FLUSS_SZENE_AUS, STIL_ORIGINAL, STIL_ORIGINAL_AUS, TERRASSEN, TERRASSEN_AUS, FEINDETAIL, FEINDETAIL_AUS, WASSER, WASSER_AUS, BRANDUNG, BRANDUNG_AUS, MEEREIS, MEEREIS_AUS, KAVITAET, KAVITAET_AUS, GEOMORPH, GEOMORPH_AUS, RELIEF, RELIEF_AUS, HIMMEL, HIMMEL_AUS, SONNE, SONNE_AUS, BIOM_CD, BIOM_CD_AUS, BIOM_ERDE, BIOM_ERDE_AUS, GEBIRGE, GEBIRGE_AUS, STIL_ORIGINAL_WOLKEN, STIL_ORIGINAL_WOLKEN_AUS, STIL_ORIGINAL_LEUCHTSAUM, STIL_ORIGINAL_LEUCHTSAUM_AUS, ANSICHTEN_DEBUG, ANSICHTEN_DEBUG_AUS, WOLKEN, WOLKEN_AUS, SCENE, SKY_DRAW_WGSL, POST, MSAA, get adapter() { return adapter; }, set adapter(v) { adapter = v; }, get device() { return device; }, set device(v) { device = v; }, get format() { return format; }, set format(v) { format = v; }, get context() { return context; }, set context(v) { context = v; }, get L() { return L; }, set L(v) { L = v; } });
+const { initGPU, makeLayouts, startPipelines, neueVarianten } = createGpuStart({ fail, OFFSCREEN, kopflos, canvas, S, VF, COMMON, NOISE, GEN, CLOUDGEN, SKY_GEN_WGSL, TRANS, MIP, UDECL, TEXH, VOLC, VOLC_AUS, HYDRO_WARP, WELLEN, WELLEN_AUS, ATMO, ATMO_AUS, ATMO_POST, ATMO_POST_AUS, BLOOM, BLOOM_AUS, FLARE, FLARE_AUS, SCHATTEN, SCHATTEN_AUS, SAUM, SAUM_AUS, EROSION, EROSION_AUS, FLUSS_GEN, FLUSS_GEN_AUS, FLUSS_SZENE, FLUSS_SZENE_AUS, STIL_ORIGINAL, STIL_ORIGINAL_AUS, TERRASSEN, TERRASSEN_AUS, FEINDETAIL, FEINDETAIL_AUS, WASSER, WASSER_AUS, BRANDUNG, BRANDUNG_AUS, MEEREIS, MEEREIS_AUS, KAVITAET, KAVITAET_AUS, GEOMORPH, GEOMORPH_AUS, RELIEF, RELIEF_AUS, HIMMEL, HIMMEL_AUS, SONNE, SONNE_AUS, BIOM_CD, BIOM_CD_AUS, BIOM_ERDE, BIOM_ERDE_AUS, GEBIRGE, GEBIRGE_AUS, STIL_ORIGINAL_WOLKEN, STIL_ORIGINAL_WOLKEN_AUS, STIL_ORIGINAL_LEUCHTSAUM, STIL_ORIGINAL_LEUCHTSAUM_AUS, ANSICHTEN_DEBUG, ANSICHTEN_DEBUG_AUS, WOLKEN, WOLKEN_AUS, NAH, NAH_AUS, GRAS, GRAS_AUS, SCENE, SKY_DRAW_WGSL, POST, MSAA, get adapter() { return adapter; }, set adapter(v) { adapter = v; }, get device() { return device; }, set device(v) { device = v; }, get format() { return format; }, set format(v) { format = v; }, get context() { return context; }, set context(v) { context = v; }, get L() { return L; }, set L(v) { L = v; } });
 
 function texArray(N, fmt, levels, extra = 0) {
   return device.createTexture({ size: [N, N, 6], format: fmt, mipLevelCount: levels,
@@ -198,14 +200,14 @@ const { atmoParams, updateTrans } = createAtmosphaere({ S, RS, dispatch, makeCtx
 const { ensureTargets } = createZiele({ RS, MSAA, OFFSCREEN, ubuf, get device() { return device; }, set device(v) { device = v; }, get L() { return L; }, set L(v) { L = v; }, get format() { return format; }, get ppDummy() { return ppDummy; }, set ppDummy(v) { ppDummy = v; } });
 
 
-const { cam, fitDist, pointers } = createKamera({ S, canvas });
+const { cam, fitDist, pointers, grund, minDist } = createKamera({ S, canvas, nachUmschalten: () => { changed({ k: 'spieler' }); buildUI(); } });
 
 const { changed, setStyle, newSeed } = createReaktion({ kopflos, variantenNachziehen, wolkenErzeugen, himmelErzeugen, S, RS, menu, regenerate, DEF, queueSky, seaFromFraction, buildRiverLines, buildUI, $, setLang, randomSeed, get device() { return device; }, set device(v) { device = v; }, get seaH() { return seaH; }, set seaH(v) { seaH = v; }, get lutDirty() { return lutDirty; }, set lutDirty(v) { lutDirty = v; }, get riverT() { return riverT; }, set riverT(v) { riverT = v; }, get PP() { return PP; }, set PP(v) { PP = v; } });
 
 
 // ------------------------------------------------------------------ Zeichnen
 let spin = 0.6, simTime = 0;
-const { render } = createZeichnen({ get ansicht() { return ansicht; }, get format() { return format; }, S, coarse, RS, eroOct, cloudRes, nebRes, cycA, cycB, canvas, ensureTargets, updateTrans, drawBiome, atmoParams, cam, fitDist, updateCyclones, CLOUD_PERIOD, SPLIT, mainGroup, buildPatches, PATCH_G, OFFSCREEN, get uData() { return uData; }, set uData(v) { uData = v; }, get simTime() { return simTime; }, set simTime(v) { simTime = v; }, get moistQ() { return moistQ; }, set moistQ(v) { moistQ = v; }, get PP() { return PP; }, set PP(v) { PP = v; }, get seaH() { return seaH; }, set seaH(v) { seaH = v; }, get device() { return device; }, set device(v) { device = v; }, get uBuf() { return uBuf; }, set uBuf(v) { uBuf = v; }, get lutDirty() { return lutDirty; }, set lutDirty(v) { lutDirty = v; }, get spin() { return spin; }, set spin(v) { spin = v; }, get dPlanet() { return dPlanet; }, set dPlanet(v) { dPlanet = v; }, get dCloud() { return dCloud; }, set dCloud(v) { dCloud = v; }, get P() { return P; }, set P(v) { P = v; }, get meshPlanet() { return meshPlanet; }, set meshPlanet(v) { meshPlanet = v; }, get meshCloud() { return meshCloud; }, set meshCloud(v) { meshCloud = v; }, get context() { return context; }, set context(v) { context = v; } });
+const { render } = createZeichnen({ get ansicht() { return ansicht; }, get jobs() { return jobs; }, grund, minDist, get L() { return L; }, get format() { return format; }, S, coarse, RS, eroOct, cloudRes, nebRes, cycA, cycB, canvas, ensureTargets, updateTrans, drawBiome, atmoParams, cam, fitDist, updateCyclones, CLOUD_PERIOD, SPLIT, mainGroup, buildPatches, PATCH_G, OFFSCREEN, get uData() { return uData; }, set uData(v) { uData = v; }, get simTime() { return simTime; }, set simTime(v) { simTime = v; }, get moistQ() { return moistQ; }, set moistQ(v) { moistQ = v; }, get PP() { return PP; }, set PP(v) { PP = v; }, get seaH() { return seaH; }, set seaH(v) { seaH = v; }, get device() { return device; }, set device(v) { device = v; }, get uBuf() { return uBuf; }, set uBuf(v) { uBuf = v; }, get lutDirty() { return lutDirty; }, set lutDirty(v) { lutDirty = v; }, get spin() { return spin; }, set spin(v) { spin = v; }, get dPlanet() { return dPlanet; }, set dPlanet(v) { dPlanet = v; }, get dCloud() { return dCloud; }, set dCloud(v) { dCloud = v; }, get P() { return P; }, set P(v) { P = v; }, get meshPlanet() { return meshPlanet; }, set meshPlanet(v) { meshPlanet = v; }, get meshCloud() { return meshCloud; }, set meshCloud(v) { meshCloud = v; }, get context() { return context; }, set context(v) { context = v; } });
 
 // ------------------------------------------------------------------ Schleife
 let last = performance.now(), budget = 256 * 256 * 2, fpsAcc = 0, fpsN = 0, fpsT = 0;

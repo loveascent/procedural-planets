@@ -1,15 +1,11 @@
 // Bildstufen nach dem Zeichnen (gemeinsam für alle Planeten-Seiten): Kantenglättung, Hochskalieren, Schärfen, Dithering.
 // Eigene WGSL-Umsetzung beschriebener Verfahren (nur Methode und Formeln, kein fremder Quelltext). Eine Stufe wird nur
 // übersetzt, wenn sie an ist. Eingabe und Ausgabe sind anzeigefertige (gamma-kodierte) Farben. Quellen: docs/GRAFIK-QUELLEN.md
-import { KUBIK, LANCZOS2 } from './kern';
+import { KUBIK, LANCZOS2, VOLLBILD_VS } from './kern';
 
 export const STUFEN_KOPF = /* wgsl */`
 struct K { g: vec4f, p: vec4f };   // g: Quelle Breite/Höhe, Ziel Breite/Höhe · p: x Schärfe bzw. innerer Radius, y Übergang, z Radius
-@group(0) @binding(0) var<uniform> K0: K;
-@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
-  return vec4f(f32((i << 1u) & 2u) * 2.0 - 1.0, f32(i & 2u) * 2.0 - 1.0, 0.0, 1.0);
-}
-`;
+@group(0) @binding(0) var<uniform> K0: K;${VOLLBILD_VS}`;
 const T = '@group(0) @binding(2) var quelle: texture_2d<f32>;\n';
 const S = '@group(0) @binding(1) var glatt: sampler;\n';
 const A = '@group(0) @binding(3) var hilfe: texture_2d<f32>;\n';

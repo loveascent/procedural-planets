@@ -2,7 +2,7 @@
 export const SCENE_HINTERGRUND = /* wgsl */`
 // ---- Hintergrund: gemeinsamer Himmel (src/sky), dazu die Sonne
 @fragment fn fsBg(vin: VO) -> @location(0) vec4f {
-  let w = U.ivp * vec4f(vin.uv * 2.0 - 1.0, 1.0, 1.0);
+  let w = U.ivp * vec4f(vin.uv * 2.0 - 1.0, 0.0, 1.0);   // Tiefe 0 = ferne Ebene (umgekehrte Tiefe)
   let dir = normalize(w.xyz / w.w - U.cam.xyz);
   let pix = max(length(fwidth(dir)), 1e-5);
   var col = hook_himmel(dir, pix, select(0.0, U.Bg.z, U.Md.w > 0.5), U.Bg.x, U.Bg.y);

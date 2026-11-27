@@ -5,6 +5,8 @@
 // Stam 1999) → mit Lage und Kamera des früheren Bildes zurück auf den Schirm.
 // Näherungen: Ringe gelten als ruhend, Saum und Himmel bewegen sich nur mit der Kamera, Höhe aus Argh/Parallaxe zählt nicht.
 
+import { VOLLBILD_VS } from '../../grafik/kern';
+
 /** Floats eines Bewegungs-Blocks (struct M). */
 export const M_FLOATS = 80;
 
@@ -19,11 +21,7 @@ struct M {
 };
 @group(0) @binding(0) var<uniform> U: array<M, 2>;
 @group(0) @binding(1) var glatt: sampler;
-@group(0) @binding(2) var wind: texture_cube<f32>;
-@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
-  return vec4f(f32((i << 1u) & 2u) * 2.0 - 1.0, f32(i & 2u) * 2.0 - 1.0, 0.0, 1.0);
-}
-fn zuKoerper(k: u32, v: vec3f) -> vec3f { return vec3f(dot(U[k].r0.xyz, v), dot(U[k].r1.xyz, v), dot(U[k].r2.xyz, v)); }
+@group(0) @binding(2) var wind: texture_cube<f32>;${VOLLBILD_VS}fn zuKoerper(k: u32, v: vec3f) -> vec3f { return vec3f(dot(U[k].r0.xyz, v), dot(U[k].r1.xyz, v), dot(U[k].r2.xyz, v)); }
 // Wo lag der Inhalt dieses Pixels im früheren Bild von Block k? xy = uv dort, z = 1 wenn dort sichtbar (2: außerdem freier Himmel)
 fn bewegung(k: u32, ndc: vec2f) -> vec3f {
   let wp = U[k].invVP * vec4f(ndc, 1.0, 1.0);

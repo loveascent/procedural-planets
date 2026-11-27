@@ -4,13 +4,15 @@ import { fpsEl, showLoading, loadBar } from './dom';
 import { t } from '../i18n';
 import { MAX_LOAD_MS, DT, PROBE_STEPS } from './zustand';
 import { zuFrueh } from '../grafik/menue';
+import { rueckstau } from '../grafik/stau';
 import { ruht } from './grafik/pfad';
 import { abschliessen } from './grafik/sim';
 
 export function starteSchleife(app: App) {
+  const stau = rueckstau();
   const loop = async (now: number) => {
     // Bildraten-Deckel; im Hintergrundfenster höchstens 10 fps, wenn „Stillstand sparen“ an ist
-    if (zuFrueh(app.S.fxCap, now, app.last) || (app.S.fxIdle && !document.hasFocus() && zuFrueh(10, now, app.last))) { requestAnimationFrame(loop); return; }
+    if (stau.voll() || zuFrueh(app.S.fxCap, now, app.last) || (app.S.fxIdle && !document.hasFocus() && zuFrueh(10, now, app.last))) { requestAnimationFrame(loop); return; }
     const real = Math.min((now - app.last) / 1000, 0.1);
     app.last = now;
     app.resize();
@@ -28,7 +30,7 @@ export function starteSchleife(app: App) {
         app.fpsAcc = 0; app.fpsFrames = 0;
       }
       if (app.S.fxIdle && ruht(app)) fpsEl.textContent = t('Standbild (nicht neu gezeichnet)', 'still image (not redrawn)');
-      else app.frameOnce(real);
+      else { app.frameOnce(real); stau.abgegeben(app.device.queue); }
       app.adaptScale(real);
       // Filmstreifen: das eben gezeichnete Bild abgreifen, solange es noch gültig ist.
       if (app.grab) { const g = app.grab; app.grab = null; await g(); }

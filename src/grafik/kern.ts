@@ -1,4 +1,10 @@
-// Gemeinsame Filterkerne (WGSL-Text), nur einmal im Code.
+// Gemeinsame WGSL-Bausteine (Vollbild-Dreieck, Filterkerne), nur einmal im Code.
+export const VOLLBILD_VS = /* wgsl */`
+@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+  return vec4f(f32((i << 1u) & 2u) * 2.0 - 1.0, f32(i & 2u) * 2.0 - 1.0, 0.0, 1.0);
+}
+`;
+
 // Kubische Faltung nach Keys; Formel und a = −0,5 (= Catmull-Rom): https://en.wikipedia.org/wiki/Bicubic_interpolation
 //   W(x) = (a+2)|x|³ − (a+3)|x|² + 1           für |x| ≤ 1
 //        = a|x|³ − 5a|x|² + 8a|x| − 4a         für 1 < |x| < 2, sonst 0

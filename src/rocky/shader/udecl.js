@@ -35,7 +35,26 @@ struct Uf {
   Fd: vec4f,     // Baustein Feindetail: Stärke (0 = aus), -, -, -
   Rv: vec4f,     // Baustein Flüsse: Größe Hydro-Karte (0 = aus), Größe Linienkarte (0 = aus), Modus (0 aus, 1 Linien v23, 2 eingegraben, 3 Wasserlinien), -
   Br: vec4f,     // Baustein Brandung: Stärke (0 = aus), -, -, -
+  vpRel: mat4x4f,         // Bodennähe: Projektion · reine Blickdrehung (Kamera im Ursprung), umgekehrte Tiefe – für Orte relativ zur Kamera
+  Ne: vec4f,              // Nah-Oktaven: Kamerarichtung ê im Planetenraum, Abstand E = |Kamera| (Radien)
+  Nf: vec4f,              // Nah-Oktaven: Startfrequenz, Zahl der Oktaven, -, Bodennähe an (1) / aus (0)
+  Bd: vec4f,              // Bodennähe: Relief-Höhe (Radien je Höheneinheit), Zeit, Gras an, Gras-Sichtweite (Radien)
+  Gc: vec4f,              // Gras-Feld: Mitte relativ zur Kamera (Welt), Schrittweite (Kachelkoordinaten je Halm)
+  Gp: vec4f,              // Gras-Feld: Mitte auf der Kugel (Planetenraum), Halme je Kante
+  GDs: vec4f, GDt: vec4f, GDss: vec4f, GDst: vec4f, GDtt: vec4f,   // Gras-Feld: Taylor-Glieder (wie Kacheln, genau.js)
+  Gi: vec4f,              // Gras-Feld: Gitterzelle der Feldecke (2 × i32 als Bits), Halmhöhe, Halmbreite (Radien)
+  NI: array<vec4f, 12>,   // Nah-Oktaven je Stufe: ganzer Teil von ê·f (exakt als f32)
+  NF: array<vec4f, 12>,   // Nah-Oktaven je Stufe: Rest ê·f − ganzer Teil
+  Tf: vec4f,              // Bodennähe, Nachbild: nahe Ebene, ferne Ebene, Szenentiefe nutzen (1/0), -
+  Fw: vec4f,              // Bodennähe, Nachbild: Blickrichtung der Kamera (Welt)
+  Bp: vec4f,              // Spielball: Richtung im Planetenraum (für csBoden: zweite Messstelle), 1 = Ball da
+  Sp: vec4f,              // Spielball: Mitte relativ zur Kamera (Welt, Radien), Radius (Radien)
+  Bq: vec4f,              // Spielball: Punkt auf der Kugel unter dem Ball relativ zur Kamera (Welt, Radien) – q für die Nah-Oktaven wie bei Kacheln
+  Sa: vec4f, Sb: vec4f, Sc: vec4f,   // Spielball: Ausrichtung Ball → Welt (Spalten), Sa.w = Ball da (1/0)
+  Gk: vec4u,              // Gras: Plätze je Detailstufe (xyz), Stempel der gespeicherten Bodenhöhen
 }
+// Luft im Nachbild endet an der Szene (Gelände), nicht an der glatten Kugel; < 0 = wie bisher bis zur Kugel
+var<private> luftEnde: f32 = -1.0;
 @group(0) @binding(0) var<uniform> U: Uf;
 @group(0) @binding(1) var samp: sampler;
 @group(0) @binding(2) var tHm: texture_2d_array<f32>;
@@ -56,3 +75,7 @@ struct VO { @builtin(position) pos: vec4f, @location(0) uv: vec2f }
   return o;
 }
 `;
+
+// Lage der neuen Felder im Uniform-Puffer (Zahlen ab Pufferanfang, wie struct Uf oben). Alles davor: siehe zeichnen.js.
+export const UO = { Tf: 360, Fw: 364, vpRel: 204, Ne: 220, Nf: 224, Bd: 228, Gc: 232, Gp: 236, GDs: 240, GDt: 244, GDss: 248, GDst: 252, GDtt: 256, Gi: 260, NI: 264, NF: 312, Bp: 368, Sp: 372, Bq: 376, Sa: 380, Sb: 384, Sc: 388, Gk: 392 };
+export const U_FLOATS = 396;

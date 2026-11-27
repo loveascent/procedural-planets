@@ -3,21 +3,23 @@
 export const SCENE_PLANET = /* wgsl */`
 @fragment fn fsPlanet(vin: PV) -> @location(0) vec4f {
   let d = normalize(vin.obj);
-  let ddx = dpdx(d);
-  let ddy = dpdy(d);
+  // Ableitungen im Bild aus dem Ort relativ zur Kamera (genau auch am Boden; dpdx(d) ist dort nur Rundungsrauschen)
+  let M = modelM();
+  let Mi = transpose(M);
+  let ddx = Mi * dpdx(vin.rel);
+  let ddy = Mi * dpdy(vin.rel);
   let N = U.T.x;
   let sea = U.T.z;
   let F = toFace(d, ddx, ddy);
   let T = texFace(tHm, F, N);
   var h = T.x;
   var g = T.z * F.jx + T.w * F.jy;
-  let pix = max(max(length(ddx), length(ddy)), 1e-6);
+  // Untergrenze 1e-6 Radien (≈ 6 m bei Erdgröße) blendete am Boden alle feineren Oktaven aus; in Bodennähe 1e-12
+  let pix = max(max(length(ddx), length(ddy)), select(1e-6, 1e-12, U.Nf.w > 0.5));
   let lod = log2(max(pix * N / 1.5708, 1.0));
-  let M = modelM();
-  let Mi = transpose(M);
   let sun = U.sun.xyz;
   let Lo = Mi * sun;
-  let Vw = normalize(U.cam.xyz - vin.world);
+  let Vw = normalize(-vin.rel);
   let muS = dot(d, Lo);
   let view = i32(U.Md.z);
 
@@ -26,14 +28,17 @@ export const SCENE_PLANET = /* wgsl */`
 
   // ============================== Verbessert ==============================
   let pal = i32(U.Md.y);
-  let mN = clamp((T.y - U.Mq.x) / max(U.Mq.y - U.Mq.x, 1e-3), 0.0, 1.0);
+  let mN = kartenFeuchte(T.y);
   let texAng = 1.5708 / N;
   // Flusskarte (r Eintiefung, g Wasserspiegel, b Flussbett) an verbogener Stelle, wie beim Eingraben
   let hy = hook_fluss_karte(d, U.Rv.x);
   let calm = 1.0 - hy.z * step(1.5, U.Rv.z);                            // im Flussbett keine Feinrillen und keine Detail-Oktaven
+  let gTex = g;
   let fd = hook_feindetail(d, pix, texAng, h, g, calm, U.Fd.x);
-  h = fd.h;
-  g = fd.g;
+  // Bodennähe: weitere Oktaven bis unter einen Meter (Baustein Nah-Oktaven, shader/nah.js), relativ zur Kamera gerechnet
+  let nh = hook_nah(Mi * vin.rel, pix, fd.h, fd.g, gTex, calm, U.Fd.x);
+  h = nh.h;
+  g = nh.g;
   g -= d * dot(g, d);
   let er = hook_erosion_nah(d, h, g, sea, calm, pix, U.EroRt.xy);
   h = er.h;
@@ -113,14 +118,17 @@ export const SCENE_PLANET = /* wgsl */`
   } else {
     var alb: vec3f;
     var rough: f32;
+    var grasA = 0.0;
     if (pal == 0) {
       let bc = hook_biom_cd(T.y, h, slope);
       alb = bc.rgb;
       rough = bc.a;
     } else {
       let be = hook_biom_erde(F, N, lod, d, h, mN, g, nz);
-      alb = be.rgb;
+      let gb = hook_gras_boden(be.rgb, d, vin.rel);   // Boden unter dem Gras (gras.js): dunkel und matt
+      alb = gb.rgb;
       rough = be.a;
+      grasA = gb.a;
     }
     // Flüsse wie in v23: weiche Maske mit Mipmaps, Wasser dunkel und glatt, spiegelt Himmel und Sonne
     let fc = hook_fluss_farbe(d, pix, alb, rough, U.Rv.y, U.Rv.z);
@@ -128,6 +136,7 @@ export const SCENE_PLANET = /* wgsl */`
     rough = fc.a;
     let ao = hook_kavitaet(F, N, lod, T.x);
     rough = clamp(rough * (1.0 - 0.55 * U.L.y), 0.08, 1.0);
+    rough = mix(rough, 1.0, grasA);   // unter dem Gras matt
     let Nn = normalize(M * nL);
     let V = Vw;
     let L = sun;

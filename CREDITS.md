@@ -85,10 +85,19 @@ and are **not** part of the repository. Screenshots in `docs/images/` are render
 | I. Quilez, domain warping and analytic noise derivatives | warped fBm for clouds and nebula, derivative-based normals |
 | E. Bruneton, *Precomputed Atmospheric Scattering: a New Implementation* (2017) | transmittance table parameterisation |
 | S. Hillaire, *A Scalable and Production Ready Sky and Atmosphere Rendering Technique* (EGSR 2020) | Rayleigh, Mie and ozone coefficients |
+| S. Hillaire, reference code [UnrealEngineSkyAtmosphere](https://github.com/sebh/UnrealEngineSkyAtmosphere) (MIT, © 2020 Epic Games), `RenderSkyRayMarching.hlsl` | atmosphere ray-march step count grows with ray length (4 near the ground, full from one atmosphere thickness); own WGSL |
+| AskAlice, [threejs-grass / threejs-worldgen](https://github.com/AskAlice/threejs-worldgen) (Apache-2.0) | grass field in `demos/gras/`: wind gust, bend and comb formulas, blade profile and shading values re-implemented in plain WGSL (no three.js, comments mark the adopted values) |
 | C. Cox & W. Munk (1954); R. Pope & E. Fry (1997) | sun-glint slope variance; absorption of pure water |
 | L. G. Henyey & J. L. Greenstein (1941) | cloud forward scattering |
 | B. Walter et al. (2007), GGX; K. Narkowicz, ACES fit (2016); J. Jimenez, bloom (2014) | specular highlights, film curve, bloom (first stage with Karis average against flickering fireflies) |
-| F. Strugar, *Continuous Distance-Dependent Level of Detail for Rendering Heightmaps* (CDLOD, 2009) | quadtree terrain tiles with geomorphing |
+| F. Strugar, *Continuous Distance-Dependent Level of Detail for Rendering Heightmaps* (CDLOD, 2009) | quadtree terrain tiles with geomorphing and frustum culling of the tiles |
+| webgpu-samples, [reversedZ](https://github.com/webgpu/webgpu-samples) (BSD-3-Clause) | reversed-Z depth buffer (float depth, clear to 0, compare `greater`), own implementation |
+| N. Reed, *Depth Precision Visualized* (NVIDIA, 2015) | why reversed floating-point depth keeps precision from orbit down to eye height |
+| G. Gribb & K. Hartmann, *Fast Extraction of Viewing Frustum Planes from the World-View-Projection Matrix* (2001) | six frustum planes from the matrix rows for tile culling |
+| D. Ohlarik, *Precisions, Precisions* (AGI, 2008) | relative-to-centre (RTC) tiles: vertex positions relative to a per-tile origin against float jitter near the ground |
+| I. Quilez, *Gradient Noise Derivatives* | analytic derivatives of the near-ground detail octaves (normals without extra samples) |
+| simondevyoutube, [Quick_Grass](https://github.com/simondevyoutube/Quick_Grass) (MIT, © 2023 simondevyoutube) | blade shape, wind sway, `murmurHash33` for per-blade randomness (own implementation after it) |
+| SimonDev, *3D World Generation* #10 and #11 (YouTube) | ideas: zoom down to eye height, tile precision, grass near the camera (ideas only, no code) |
 | R. Barnes, C. Lehman, D. Mulla, *Priority-Flood* (Computers & Geosciences, 2014) | filling sinks into lakes, drainage directions |
 | J. O'Callaghan & D. Mark (1984), flow accumulation; L. Leopold & T. Maddock (1953), hydraulic geometry | river discharge, width ∝ Q^0.5, depth ∝ Q^0.4 |
 | N. McDonald, *Procedural Hydrology* (2020) | reference for carving rivers into the terrain and filling basins (idea, not code) |

@@ -5,7 +5,7 @@ import type { App } from '../app';
 import { Kette, type KettenWahl } from '../../grafik/kette';
 import { invert, type Mat4 } from '../../math';
 import type { CubeField } from '../zustand';
-import { writeRender, kameraPose, drehrate, helligkeit, type Pose } from '../darstellung';
+import { writeRender, kameraPose, drehrate, helligkeit, bildBindung, type Pose } from '../darstellung';
 import type { Zusatz } from './zusatz';
 import { AUFLOESEN, VERSCHIEBEN, M_FLOATS } from './zeitlich';
 import { gezeigt, laeuft, nummer } from './sim';
@@ -112,15 +112,7 @@ function zeitDurchgang(a: App, g: Gfx, enc: GPUCommandEncoder, name: 'aufloesen'
 function szene(a: App, g: Gfx, enc: GPUCommandEncoder, z: Zusatz, bild: { dye: CubeField; flow: CubeField; prs: CubeField }, ziel: GPUTextureView, msaa: GPUTextureView | null, himmel: GPUTextureView | null, ausschnitt?: number[]) {
   const hell = helligkeit(a, enc, bild.dye);
   const teile: object[] = [a.renderPipe, hell, bild.dye.tex, bild.flow.tex, bild.prs.tex, a.aux.tex, ...(himmel ? [himmel] : [])];
-  const bindung = () => a.device.createBindGroup({
-    layout: a.renderPipe.getBindGroupLayout(0),
-    entries: [
-      { binding: 0, resource: { buffer: a.renderBuf } }, { binding: 1, resource: a.sampler },
-      { binding: 2, resource: bild.dye.cube }, { binding: 3, resource: bild.flow.cube }, { binding: 4, resource: a.aux.cube },
-      { binding: 5, resource: bild.prs.cube }, { binding: 6, resource: a.sky.view },
-      ...(himmel ? [{ binding: 7, resource: himmel }] : []), { binding: 8, resource: hell },
-    ],
-  });
+  const bindung = () => bildBindung(a, bild, hell, himmel);
   const rp = enc.beginRenderPass({
     colorAttachments: [{ view: msaa ?? ziel, ...(msaa ? { resolveTarget: ziel } : {}), loadOp: 'clear', storeOp: msaa ? 'discard' : 'store', clearValue: [0, 0, 0, a.S.transparent ? 0 : 1] }],
   });
@@ -166,6 +158,7 @@ export function zeichneGrafik(a: App, flowSrc: CubeField) {
   const rs = S.fxDynIntern && S.autoQuality ? a.renderScale : 1;
   const mass = S.fxUp !== 'off' ? S.fxScale * rs : 1;
   const iw = Math.max(16, Math.round(W * mass)), ih = Math.max(16, Math.round(H * mass));
+  const gw = Math.max(16, Math.round(iw * S.fxFoveaScale)), gh = Math.max(16, Math.round(ih * S.fxFoveaScale));   // grobes Fovea-Bild
   const rw = w.muster === 'checker' ? Math.ceil(iw / 2) : iw, rh = w.muster === 'lines' ? Math.ceil(ih / 2) : ih;
   const sw = w.zeitlich === 'taau' ? W : iw, sh = w.zeitlich === 'taau' ? H : ih;
   const o: KettenWahl = { up: S.fxUp, aa: w.zeitlich === 'off' ? S.fxAA : 'off', scharf: S.fxSharpOn, staerke: S.fxSharp, dither: S.fxDither, f16: S.fxF16 };
@@ -204,7 +197,6 @@ export function zeichneGrafik(a: App, flowSrc: CubeField) {
     a.lauf = lauf;
     if (w.fovea) {
       // grobes Gesamtbild in einem eigenen Auftrag (eigene Pixelgröße für Sterne und Ringe)
-      const gw = Math.max(16, Math.round(iw * S.fxFoveaScale)), gh = Math.max(16, Math.round(ih * S.fxFoveaScale));
       lauf.pixH = gh;
       writeRender(a);
       const e2 = a.device.createCommandEncoder();
@@ -222,7 +214,7 @@ export function zeichneGrafik(a: App, flowSrc: CubeField) {
       const x0 = Math.max(0, Math.floor(iw / 2) - R), y0 = Math.max(0, Math.floor(ih / 2) - R);
       const scharf = K.holen('fovea-fein', iw, ih, z.format);
       szene(a, g, enc, z, bild, scharf.v, msaa, himmel, [x0, y0, Math.min(iw - x0, 2 * R + 1), Math.min(ih - y0, 2 * R + 1)]);
-      const grob = K.holen('fovea-grob', Math.max(16, Math.round(iw * S.fxFoveaScale)), Math.max(16, Math.round(ih * S.fxFoveaScale)), z.format);
+      const grob = K.holen('fovea-grob', gw, gh, z.format);
       K.stufe(enc, 'fovea', scharf.v, roh!.v, z.format, [iw, ih, iw, ih], [0, 0.08, r, 0], grob.v);
     } else szene(a, g, enc, z, bild, roh ? roh.v : a.targetView(), msaa, himmel, direkt ? a.ansicht?.ausschnitt : undefined);   // eingebettet: nur die Fläche des Planeten
     quelle = roh;

@@ -12,7 +12,7 @@ export function createZiele(ext) {
     RS.w = w; RS.h = h;
     const rt = (W, H, fmt) => ext.device.createTexture({ size: [W, H], format: fmt || 'rgba16float', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
     RS.scene = rt(w, h); RS.hdr2 = rt(w, h);
-    RS.depth = ext.device.createTexture({ size: [w, h], format: 'depth24plus', sampleCount: MSAA, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+    RS.depth = ext.device.createTexture({ size: [w, h], format: 'depth32float', sampleCount: MSAA, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
     RS.msaa = MSAA > 1 ? ext.device.createTexture({ size: [w, h], format: 'rgba16float', sampleCount: MSAA, usage: GPUTextureUsage.RENDER_ATTACHMENT }) : null;
     RS.sceneV = RS.scene.createView(); RS.hdr2V = RS.hdr2.createView(); RS.depthV = RS.depth.createView();
     RS.msaaV = RS.msaa ? RS.msaa.createView() : null;
@@ -28,7 +28,7 @@ export function createZiele(ext) {
       RS.bloom.push({ tx, v: tx.createView(), w: bw, h: bh, pd: ubuf(16), pu: ubuf(16) });
       bw >>= 1; bh >>= 1;
     }
-    const pg = (buf, a, b) => ext.device.createBindGroup({ layout: ext.L.post, entries: [{ binding: 0, resource: { buffer: buf } }, { binding: 1, resource: a }, { binding: 2, resource: b || a }] });
+    const pg = (buf, a, b) => ext.device.createBindGroup({ layout: ext.L.post, entries: [{ binding: 0, resource: { buffer: buf } }, { binding: 1, resource: a }, { binding: 2, resource: b || a }, { binding: 3, resource: RS.depthV }] });
     RS.pgComp = pg(ext.ppDummy, RS.sceneV);
     RS.pgFinNoBloom = pg(ext.ppDummy, RS.hdr2V);
     RS.pgFin = RS.bloom.length ? pg(ext.ppDummy, RS.hdr2V, RS.bloom[0].v) : RS.pgFinNoBloom;

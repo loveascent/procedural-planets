@@ -27,6 +27,7 @@ import { U_BYTES, MAX_KUGELN } from './zeichnen/shader/gemeinsam.ts';
 import { baueOberflaeche, WELT_STANDARD, type Steuerung } from './oberflaeche/panel.ts';
 import { Kette } from '../grafik/kette.ts';
 import { KETTE_STANDARD, ketteAn, ketteSichtbar, zuFrueh, type KettenStand } from '../grafik/menue.ts';
+import { rueckstau } from '../grafik/stau';
 import type { Settings } from '../ui.ts';
 import { FELS_BAUSTEINE, GAS_BAUSTEINE } from './typBausteine.ts';
 
@@ -277,9 +278,10 @@ export async function startWelt() {
   // ---------- Bild ----------
   let letzte = performance.now(), fpsZaehler = 0, fpsZeit = 0;
   let kette: Kette | null = null;   // Grafik-Optionen: gibt es nur, solange eine Stufe an ist
+  const stau = rueckstau();
   function bild(jetztMs: number) {
     const grafik = E as unknown as KettenStand;
-    if (zuFrueh(grafik.fxCap, jetztMs, letzte)) { requestAnimationFrame(bild); return; }
+    if (stau.voll() || zuFrueh(grafik.fxCap, jetztMs, letzte)) { requestAnimationFrame(bild); return; }
     const dt = Math.min(0.1, (jetztMs - letzte) / 1000); letzte = jetztMs; jetzt += dt;
     fpsZaehler++; fpsZeit += dt; if (fpsZeit > 0.5) { info.fps = fpsZaehler / fpsZeit; fpsZaehler = 0; fpsZeit = 0; }
     g.anpassen();
@@ -426,6 +428,7 @@ export async function startWelt() {
     pass.end();
     stufen?.fertig();
     dev.queue.submit([enc.finish()]);
+    stau.abgegeben(dev.queue);
     w.koerper.forEach((k, i) => { k.p[0] = echt[i].p[0]; k.p[1] = echt[i].p[1]; k.p[2] = echt[i].p[2]; k.spin = echt[i].s; });
     w.truemmer.p.set(trEcht);
     requestAnimationFrame(bild);

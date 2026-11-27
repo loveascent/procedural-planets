@@ -4,8 +4,9 @@ import { t } from '../../i18n';
 // GPU-Start: Adapter und Gerät (mit Leistungsprüfung), Bindungs-Layouts und die asynchron übersetzten Pipelines.
 // ext: { fail, OFFSCREEN, canvas, S, VF, COMMON, NOISE, GEN, CLOUDGEN, SKY_GEN_WGSL, TRANS, MIP, UDECL, TEXH, VOLC, VOLC_AUS, HYDRO_WARP, WELLEN, WELLEN_AUS, ATMO, ATMO_AUS, ATMO_POST, ATMO_POST_AUS, BLOOM, BLOOM_AUS, FLARE, FLARE_AUS, SCHATTEN, SCHATTEN_AUS, SAUM, SAUM_AUS, EROSION, EROSION_AUS, FLUSS_GEN, FLUSS_GEN_AUS, FLUSS_SZENE, FLUSS_SZENE_AUS, STIL_ORIGINAL, STIL_ORIGINAL_AUS, TERRASSEN, TERRASSEN_AUS, FEINDETAIL, FEINDETAIL_AUS, WASSER, WASSER_AUS, BRANDUNG, BRANDUNG_AUS, MEEREIS, MEEREIS_AUS, KAVITAET, KAVITAET_AUS, GEOMORPH, GEOMORPH_AUS, RELIEF, RELIEF_AUS, HIMMEL, HIMMEL_AUS, SONNE, SONNE_AUS, BIOM_CD, BIOM_CD_AUS, BIOM_ERDE, BIOM_ERDE_AUS, GEBIRGE, GEBIRGE_AUS, STIL_ORIGINAL_WOLKEN, STIL_ORIGINAL_WOLKEN_AUS, STIL_ORIGINAL_LEUCHTSAUM, STIL_ORIGINAL_LEUCHTSAUM_AUS, ANSICHTEN_DEBUG, ANSICHTEN_DEBUG_AUS, WOLKEN, WOLKEN_AUS, SCENE, SKY_DRAW_WGSL, POST, MSAA, adapter*, device*, format*, context*, L* }  (* = lebender Zustand, per Getter/Setter)
 import { KRATER } from '../shader/krater.js';
+import { SPIELER } from '../shader/spieler.js';
 export function createGpuStart(ext) {
-  const { fail, OFFSCREEN, canvas, S, VF, COMMON, NOISE, GEN, CLOUDGEN, SKY_GEN_WGSL, TRANS, MIP, UDECL, TEXH, VOLC, VOLC_AUS, HYDRO_WARP, WELLEN, WELLEN_AUS, ATMO, ATMO_AUS, ATMO_POST, ATMO_POST_AUS, BLOOM, BLOOM_AUS, FLARE, FLARE_AUS, SCHATTEN, SCHATTEN_AUS, SAUM, SAUM_AUS, EROSION, EROSION_AUS, FLUSS_GEN, FLUSS_GEN_AUS, FLUSS_SZENE, FLUSS_SZENE_AUS, STIL_ORIGINAL, STIL_ORIGINAL_AUS, TERRASSEN, TERRASSEN_AUS, FEINDETAIL, FEINDETAIL_AUS, WASSER, WASSER_AUS, BRANDUNG, BRANDUNG_AUS, MEEREIS, MEEREIS_AUS, KAVITAET, KAVITAET_AUS, GEOMORPH, GEOMORPH_AUS, RELIEF, RELIEF_AUS, HIMMEL, HIMMEL_AUS, SONNE, SONNE_AUS, BIOM_CD, BIOM_CD_AUS, BIOM_ERDE, BIOM_ERDE_AUS, GEBIRGE, GEBIRGE_AUS, STIL_ORIGINAL_WOLKEN, STIL_ORIGINAL_WOLKEN_AUS, STIL_ORIGINAL_LEUCHTSAUM, STIL_ORIGINAL_LEUCHTSAUM_AUS, ANSICHTEN_DEBUG, ANSICHTEN_DEBUG_AUS, WOLKEN, WOLKEN_AUS, SCENE, SKY_DRAW_WGSL, POST, MSAA } = ext;
+  const { fail, OFFSCREEN, canvas, S, VF, COMMON, NOISE, GEN, CLOUDGEN, SKY_GEN_WGSL, TRANS, MIP, UDECL, TEXH, VOLC, VOLC_AUS, HYDRO_WARP, WELLEN, WELLEN_AUS, ATMO, ATMO_AUS, ATMO_POST, ATMO_POST_AUS, BLOOM, BLOOM_AUS, FLARE, FLARE_AUS, SCHATTEN, SCHATTEN_AUS, SAUM, SAUM_AUS, EROSION, EROSION_AUS, FLUSS_GEN, FLUSS_GEN_AUS, FLUSS_SZENE, FLUSS_SZENE_AUS, STIL_ORIGINAL, STIL_ORIGINAL_AUS, TERRASSEN, TERRASSEN_AUS, FEINDETAIL, FEINDETAIL_AUS, WASSER, WASSER_AUS, BRANDUNG, BRANDUNG_AUS, MEEREIS, MEEREIS_AUS, KAVITAET, KAVITAET_AUS, GEOMORPH, GEOMORPH_AUS, RELIEF, RELIEF_AUS, HIMMEL, HIMMEL_AUS, SONNE, SONNE_AUS, BIOM_CD, BIOM_CD_AUS, BIOM_ERDE, BIOM_ERDE_AUS, GEBIRGE, GEBIRGE_AUS, STIL_ORIGINAL_WOLKEN, STIL_ORIGINAL_WOLKEN_AUS, STIL_ORIGINAL_LEUCHTSAUM, STIL_ORIGINAL_LEUCHTSAUM_AUS, ANSICHTEN_DEBUG, ANSICHTEN_DEBUG_AUS, WOLKEN, WOLKEN_AUS, NAH, NAH_AUS, GRAS, GRAS_AUS, SCENE, SKY_DRAW_WGSL, POST, MSAA } = ext;
   async function initGPU() {
     if (ext.kopflos) { ext.device = ext.kopflos.device; ext.format = 'rgba8unorm'; return; }   // eingebettet: gemeinsames Gerät der Welt
     if (!navigator.gpu) fail(t('Dieser Browser kann kein WebGPU. Bitte Chrome oder Edge ab 113, Safari ab 26 oder Firefox ab 141 nehmen.', 'This browser has no WebGPU. Please use Chrome or Edge 113+, Safari 26+ or Firefox 141+.'));
@@ -26,7 +27,9 @@ export function createGpuStart(ext) {
   }
   
   function makeLayouts() {
-    const tex = (b, dim) => ({ binding: b, visibility: VF, texture: dim ? { viewDimension: dim } : {} });
+    const tex = (b, dim, visibility = VF) => ({ binding: b, visibility, texture: dim ? { viewDimension: dim } : {} });
+    const VFC = VF | GPUShaderStage.COMPUTE;
+    const texC = (b, dim) => tex(b, dim, VFC);
     const genL = (fmt, dim) => ext.device.createBindGroupLayout({ entries: [
       { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { hasDynamicOffset: true, minBindingSize: 160 } },
       { binding: 1, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: fmt, viewDimension: dim } },
@@ -36,12 +39,17 @@ export function createGpuStart(ext) {
       { binding: 1, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: fmt, viewDimension: '2d-array' } },
     ] });
     ext.L = {
+      // main auch für den Rechen-Shader csBoden (Bodenhöhe unter der Kamera, gleiche Formel wie die Kacheln)
       main: ext.device.createBindGroupLayout({ entries: [
-        { binding: 0, visibility: VF, buffer: {} }, { binding: 1, visibility: VF, sampler: {} },
-        tex(2, '2d-array'), tex(3), tex(4, '2d-array'), tex(5, '2d-array'), tex(6), tex(7, '2d-array'), tex(8, '2d-array'),
+        { binding: 0, visibility: VFC, buffer: {} }, { binding: 1, visibility: VFC, sampler: {} },
+        texC(2, '2d-array'), texC(3), texC(4, '2d-array'), texC(5, '2d-array'), texC(6), texC(7, '2d-array'), texC(8, '2d-array'),
       ] }),
-      draw: ext.device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VF, buffer: {} }] }),
-      post: ext.device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VF, buffer: {} }, tex(1), tex(2)] }),
+      boden: ext.device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } }] }),
+      grasW: ext.device.createBindGroupLayout({ entries: [1, 2, 3].map((binding) => ({ binding, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } })) }),   // Gras-Vorlauf csGras
+      grasR: ext.device.createBindGroupLayout({ entries: [{ binding: 4, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } }] }),
+      draw: ext.device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VFC, buffer: {} }] }),
+      post: ext.device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VF, buffer: {} }, tex(1), tex(2),
+        { binding: 3, visibility: VF, texture: { sampleType: 'depth', multisampled: MSAA > 1 } }] }),   // Tiefe der Szene (Luft endet am Gelände)
       genH: ext.device.createBindGroupLayout({ entries: [
         { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { hasDynamicOffset: true, minBindingSize: 160 } },
         { binding: 1, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba16float', viewDimension: '2d-array' } },
@@ -60,7 +68,7 @@ export function createGpuStart(ext) {
     volcano: { an: () => S.volcanoOn, pipelines: ['gen', 'bg', 'planet', 'cloud'] },
     waves: { an: () => S.modWaves, pipelines: ['bg', 'planet', 'cloud'] },
     clouds: { an: () => S.modClouds, pipelines: ['bg', 'planet', 'cloud', 'cloudGen'] },
-    air: { an: () => S.modAtmo, pipelines: ['bg', 'planet', 'cloud', 'comp', 'trans'] },
+    air: { an: () => S.modAtmo, pipelines: ['bg', 'planet', 'cloud', 'comp', 'trans', 'grasWahl'] },
     bloom: { an: () => S.modBloom, pipelines: ['down', 'up', 'fin'] },
     flare: { an: () => S.modFlare, pipelines: ['fin'] },
     shadows: { an: () => S.modShadows, pipelines: ['planet'] },
@@ -69,13 +77,15 @@ export function createGpuStart(ext) {
     rivers: { an: () => S.rivers !== 0, pipelines: ['gen', 'planet'] },
     original: { an: () => S.style === 'orig', pipelines: ['planet', 'cloud', 'comp'] },
     terraces: { an: () => S.terrace > 0, pipelines: ['planet'] },
-    detail: { an: () => S.detail > 0, pipelines: ['planet'] },
+    detail: { an: () => S.detail > 0, pipelines: ['planet', 'boden', 'grasWahl'] },
     surf: { an: () => S.foam > 0, pipelines: ['planet'] },
     waterbody: { an: () => S.modWaterBody, pipelines: ['planet'] },
     ice: { an: () => S.modIce && S.palette === 'earth', pipelines: ['planet'] },
     cavity: { an: () => S.modCavity, pipelines: ['planet'] },
     geomorph: { an: () => S.mesh === 1, pipelines: ['planet'] },
-    relief: { an: () => S.relief > 0 && S.style !== 'orig', pipelines: ['planet', 'cloud'] },
+    relief: { an: () => S.relief > 0 && S.style !== 'orig', pipelines: ['planet', 'cloud', 'boden', 'grasWahl'] },
+    nah: { an: () => S.boden && S.nahOkt && S.detail > 0, pipelines: ['planet', 'boden', 'grasWahl'] },
+    gras: { an: () => S.boden && S.gras, pipelines: ['gras', 'grasWahl'] },
     sky: { an: () => S.nebula > 0 || S.stars > 0, pipelines: ['bg', 'nebGen'] },
     sun: { an: () => S.modSun, pipelines: ['bg'] },
     biomEarth: { an: () => S.palette === 'earth', pipelines: ['planet'] },
@@ -109,6 +119,8 @@ export function createGpuStart(ext) {
     const eis = an('ice') ? MEEREIS : MEEREIS_AUS;
     const kav = an('cavity') ? KAVITAET : KAVITAET_AUS;
     const geo = an('geomorph') ? GEOMORPH : GEOMORPH_AUS;
+    const nah = an('nah') ? NAH : NAH_AUS;
+    const gra = an('gras') ? GRAS : GRAS_AUS;
     const rel = an('relief') ? RELIEF : RELIEF_AUS;
     const him = an('sky') ? HIMMEL : HIMMEL_AUS;
     const son = an('sun') ? SONNE : SONNE_AUS;
@@ -121,42 +133,49 @@ export function createGpuStart(ext) {
     const mods = {
       gen: [COMMON + NOISE + ero + vol + fluGen + geb + GEN, 'gen'], cloudGen: [COMMON + NOISE + CLOUDGEN, 'cloudGen'], nebGen: [SKY_GEN_WGSL, 'nebGen'],
       trans: [TRANS, 'trans'], mip16: [MIP('rgba16float'), 'mip16'], mip8: [MIP('rgba8unorm'), 'mip8'],
-      scene: [UDECL + COMMON + TEXH + NOISE + sto + ter + fdt + wsb + brd + eis + kav + geo + rel + bcd + ber + wor + dbg + fluSzene + ero + vol + wel + sch + luft + wol + SCENE + him + son, 'scene'],
-      post: [UDECL + COMMON + TEXH + luft + luftPost + blm + flr + saum + leu + POST, 'post'],
+      scene: [UDECL + COMMON + TEXH + NOISE + sto + ter + fdt + nah + wsb + brd + eis + kav + geo + rel + bcd + ber + wor + dbg + fluSzene + ero + vol + wel + sch + luft + wol + SCENE + gra + SPIELER + him + son, 'scene'],
+      post: [UDECL + COMMON + TEXH + `@group(1) @binding(3) var tTiefe: ${MSAA > 1 ? 'texture_depth_multisampled_2d' : 'texture_depth_2d'};
+` + luft + luftPost + blm + flr + saum + leu + POST, 'post'],
     };
     const M = {};
     const braucht = (...ks) => !only || ks.some((k) => only.includes(k));
-    const mkeys = { gen: braucht('gen'), scene: braucht('bg', 'planet', 'cloud'), post: braucht('comp', 'down', 'up', 'fin'), cloudGen: braucht('cloudGen') && an('clouds'), nebGen: braucht('nebGen') && an('sky'), trans: braucht('trans') && an('air') };
+    const mkeys = { gen: braucht('gen'), scene: braucht('bg', 'planet', 'cloud', 'boden', 'gras', 'grasWahl', 'spieler'), post: braucht('comp', 'down', 'up', 'fin'), cloudGen: braucht('cloudGen') && an('clouds'), nebGen: braucht('nebGen') && an('sky'), trans: braucht('trans') && an('air') };
     for (const [k, [code, label]] of Object.entries(mods)) if (k === 'cloudGen' || k === 'nebGen' || k === 'trans' ? mkeys[k] : (!only || mkeys[k])) M[k] = ext.device.createShaderModule({ code, label });
     const pl = (...ls) => ext.device.createPipelineLayout({ bindGroupLayouts: ls });
-    const comp = (m, lay, entry = 'main') => ext.device.createComputePipelineAsync({ layout: pl(lay), compute: { module: m, entryPoint: entry } });
+    const comp = (m, lay, entry = 'main', layout = null) => ext.device.createComputePipelineAsync({ layout: layout || pl(lay), compute: { module: m, entryPoint: entry } });
     const hdr = 'rgba16float';
     const vtx = [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] }];
-    const vtxPatch = [vtx[0], { arrayStride: 16, stepMode: 'instance', attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x4' }] }];
+    // Kachel-Instanz: 8 × vec4 (netz.js, INST_F = 32 Zahlen = 128 Byte), Stellen 1 … 8 im Eckpunkt-Shader vsPatch
+    const vtxPatch = [vtx[0], { arrayStride: 128, stepMode: 'instance', attributes: Array.from({ length: 8 }, (_, i) => ({ shaderLocation: 1 + i, offset: 16 * i, format: 'float32x4' })) }];
     const premul = { color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' } };
     const add = { color: { srcFactor: 'one', dstFactor: 'one' }, alpha: { srcFactor: 'one', dstFactor: 'one' } };
     const rend = (m, vs, fs, layout, fmt, o = {}) => ext.device.createRenderPipelineAsync({
       layout,
-      vertex: { module: m, entryPoint: vs, buffers: o.mesh === 'patch' ? vtxPatch : o.mesh ? vtx : [] },
+      vertex: { module: m, entryPoint: vs, buffers: o.mesh === 'patch' ? vtxPatch : o.mesh === 'gras' ? [] : o.mesh ? vtx : [] },
       fragment: { module: m, entryPoint: fs, targets: [{ format: fmt, ...(o.blend ? { blend: o.blend } : {}) }] },
-      primitive: { topology: 'triangle-list', cullMode: o.mesh ? 'back' : 'none' },
+      primitive: { topology: 'triangle-list', cullMode: o.mesh && !o.zweiseitig ? 'back' : 'none' },
       ...(o.ms && MSAA > 1 ? { multisample: { count: MSAA } } : {}),
-      ...(o.depth ? { depthStencil: { format: 'depth24plus', depthWriteEnabled: o.depth === 'write', depthCompare: o.depth === 'always' ? 'always' : 'less' } } : {}),
+      // Umgekehrte Tiefe (webgpu-samples reversedZ): depth32float, Vergleich 'greater' (nah = 1, fern = 0)
+      ...(o.depth ? { depthStencil: { format: 'depth32float', depthWriteEnabled: o.depth === 'write', depthCompare: { always: 'always', hinten: 'greater-equal', write: 'greater' }[o.depth] } } : {}),
     });
     const scene = pl(ext.L.main, ext.L.draw), post = pl(ext.L.main, ext.L.post);
     const fabrik = {
       gen: () => comp(M.gen, ext.L.genH), cloudGen: () => comp(M.cloudGen, ext.L.gen8), nebGen: () => comp(M.nebGen, ext.L.gen16, 'skyGen'), trans: () => comp(M.trans, ext.L.trans),
       mip16: () => comp(M.mip16, ext.L.mip16), mip8: () => comp(M.mip8, ext.L.mip8),
-      bg: () => rend(M.scene, 'vsFull', 'fsBg', scene, hdr, { depth: 'always', ms: true }),
+      bg: () => rend(M.scene, 'vsFull', 'fsBg', scene, hdr, { depth: 'hinten', ms: true }),   // Tiefe 0 = fern: nur wo noch nichts steht
       planet: () => rend(M.scene, 'vsPatch', 'fsPlanet', scene, hdr, { mesh: 'patch', depth: 'write', ms: true }),
       cloud: () => rend(M.scene, 'vsPlanet', 'fsCloud', scene, hdr, { mesh: true, depth: 'always', blend: premul, ms: true }),
+      boden: () => comp(M.scene, null, 'csBoden', pl(ext.L.main, ext.L.draw, ext.L.boden)),   // Gruppe 1 = D (Relief-Höhe), Gruppe 2 = Ergebnis
+      gras: () => rend(M.scene, 'vsGras', 'fsGras', pl(ext.L.main, ext.L.draw, ext.L.grasR), hdr, { mesh: 'gras', depth: 'write', ms: true, zweiseitig: true }),
+      grasWahl: () => comp(M.scene, null, 'csGras', pl(ext.L.main, ext.L.draw, ext.L.grasW)),
+      spieler: () => rend(M.scene, 'vsSpieler', 'fsSpieler', scene, hdr, { depth: 'write', ms: true }),   // Spielball (kamera/spieler.js), immer übersetzt, gezeichnet nur bei S.spieler
       comp: () => rend(M.post, 'vsFull', 'fsComp', post, hdr),
       down: () => rend(M.post, 'vsFull', 'fsDown', post, hdr),
       up: () => rend(M.post, 'vsFull', 'fsUp', post, hdr, { blend: add }),
       fin: () => rend(M.post, 'vsFull', 'fsFinal', post, ext.format),
     };
 
-    const list = Object.fromEntries(Object.entries(fabrik).filter(([k]) => (!only || only.includes(k)) && !(k === 'cloud' && !an('clouds')) && !(k === 'cloudGen' && !an('clouds')) && !(k === 'nebGen' && !an('sky')) && !(k === 'trans' && !an('air')) && !((k === 'down' || k === 'up') && !an('bloom'))).map(([k, f]) => [k, f()]));
+    const list = Object.fromEntries(Object.entries(fabrik).filter(([k]) => (!only || only.includes(k)) && !(k === 'cloud' && !an('clouds')) && !(k === 'cloudGen' && !an('clouds')) && !(k === 'nebGen' && !an('sky')) && !(k === 'trans' && !an('air')) && !((k === 'gras' || k === 'grasWahl') && !an('gras')) && !((k === 'down' || k === 'up') && !an('bloom'))).map(([k, f]) => [k, f()]));
     return { list, mods: M };
   }
   // Baustein-Varianten nachziehen: wenn ein Schalter sich geändert hat, nur die betroffenen Pipelines neu übersetzen.
