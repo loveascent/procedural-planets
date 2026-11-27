@@ -60,6 +60,7 @@ export function initIfNeeded(app: App) {
   app.needsDye = false;
   showLoading(app.warm > 0);
   app.restored = false;
+  if (fresh && app.warm === 0 && !app.kopflos) app.faceMainStorm();   // ohne Vorrechnen läuft warmBatch nie; in der Welt dreht die Welt
   if (fresh && app.S.remember) void app.loadState();
 }
 
