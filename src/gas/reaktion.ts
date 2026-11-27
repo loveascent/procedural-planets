@@ -31,5 +31,8 @@ export function onChange(app: App, key: Key) {
     case 'map': canvas.classList.toggle('map', app.S.map); break;
     case 'autoQuality': app.renderScale = 1; break;
     case 'pixelDensity': app.dpr = app.S.pixelDensity; break;
+    case 'fxCare': app.buildPipes(app.S.seamless); break;
+    case 'fxBind': app.bindungen = undefined; break;
   }
+  if (key.startsWith('fx') || ['arghOn', 'pomOn', 'autoQuality', 'map', 'nebula', 'stars'].includes(key)) app.updateVisibility();
 }

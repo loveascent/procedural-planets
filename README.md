@@ -16,6 +16,7 @@ band, coastline and debris cloud comes from equations and numbers.
 [Rocky planet](https://loveascent.github.io/procedural-planets/index.html?body=rocky) ·
 [Moon](https://loveascent.github.io/procedural-planets/index.html?body=moon) ·
 [Cream in coffee](https://loveascent.github.io/procedural-planets/coffee.html) ·
+[WebGPU grass field](https://loveascent.github.io/procedural-planets/gras/) ·
 [every version since v0.1](#versions-from-the-first-prototype-to-the-solar-system)
 
 Needs a browser with WebGPU: Chrome/Edge 113+, Safari 26+, Firefox 141+, Android Chrome 121+.

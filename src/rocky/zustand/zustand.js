@@ -1,5 +1,7 @@
 // Zustand und Voreinstellungen des Gesteinsplaneten: alle Regler-Werte (S), ihre Standardwerte (DEF), Auflösungen aus der Adresse.
 // Liest Adresse (?seed=, ?style= …, #Seed) und Bewegungs-Einstellung; keine GPU, keine Menü-Kenntnis.
+import { KETTE_STANDARD } from '../../grafik/menue';
+
 export function createZustand(Q, coarse) {
   const randomSeed = () => String(Math.floor(10000000 + Math.random() * 89999999));
   const hashSeed = /^#?(\d{3,12})$/.exec(location.hash);
@@ -25,6 +27,12 @@ export function createZustand(Q, coarse) {
     rotate: true, spin: 1.2, spinZoom: 1.0, volcanoes: 0.15, volcanoOn: true, volcanoType: 0, rivers: 3, riverAmount: 1, mesh: 0, craterFill: 1,
     profile: 'full', modWaves: false, modClouds: true, modShadows: true, modAtmo: true, modRim: false, rimStr: 0.35, modBloom: true, modFlare: true, modWaterBody: true, modIce: true, modCavity: true, modSun: true, modMountains: true, tilt: 23, fov: 36,
     view: 0, quality: -1, msaa: MSAA_Q,
+    ...KETTE_STANDARD,   // Grafik-Optionen (Bildkette, Deckel): alle aus
+    // Bodennähe (Zoom bis auf Augenhöhe, Ideen aus SimonDev „3D World Generation“ #9/#10): umgekehrte Tiefe, Orte relativ zur Kamera,
+    // tiefere Kacheln, Nah-Oktaven, Frustum-Culling, Gras (Quick_Grass)
+    boden: true, frustum: true, nahOkt: true, bodenTiefe: 20, radiusKm: 6371, augeM: 1.7, kippAb: 0.02,
+    spieler: false,   // Spielball in Bodennähe (kamera/spieler.js): WASD, Leertaste, Taste B
+    gras: true, grasSicht: 50, grasAbstand: 0.13, grasMax: 768, grasAb: 60, grasLicht: 1.6, grasGlanz: 0.5,   // Feld wie GrassGPU: 768² Zellen à 0,13 m
     moon: Q.get('body') === 'moon' ? 1 : 0,
   };
   // Mond: derselbe Motor wie der Gesteinsplanet, aber ohne Meer, Luft, Wolken und Flüsse; die Vulkanformel ist durch die Kraterformel ersetzt (shader/krater.js)

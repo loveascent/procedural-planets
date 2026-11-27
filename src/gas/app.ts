@@ -64,11 +64,21 @@ export class App {
   renderKey: string | null = null;
   sky!: Sky;
 
+  // Grafik-Optionen (alle null/leer, solange sie aus sind)
+  lauf: import('./grafik/pfad').Lauf | null = null;   // Zusätze für das gerade gezeichnete Bild
+  gfx: import('./grafik/pfad').Gfx | null = null;
+  himmelPipe: GPURenderPipeline | null = null;
+  geteilt: import('./grafik/sim').Geteilt | null = null;
+  bindungen: Map<string, GPUBindGroup> | undefined;
+
   vel: CubeField[] = [];
   prs: CubeField[] = [];
   aux!: CubeField;
   div!: CubeField;
   dye: CubeField[] = [];
+  /** Pflege-Ziel (Band-Mäander-Rauschen, Farbstoff-Auflösung/8) und Bandfarben-Tabelle (4096×1), jeden Schritt neu (sim.ts step). */
+  ziel: CubeField | null = null;
+  lut: CubeField | null = null;
   flow!: CubeField;
   dummy: CubeField;
   parts!: GPUBuffer;
@@ -126,6 +136,8 @@ export class App {
         { binding: 5, visibility: C, buffer: { type: 'storage' } },
         { binding: 6, visibility: C, texture: { sampleType: 'float', viewDimension: '2d-array' } },
         { binding: 7, visibility: C, texture: { sampleType: 'float', viewDimension: '2d-array' } },
+        { binding: 8, visibility: C, texture: { sampleType: 'float', viewDimension: 'cube' } },       // Pflege-Ziel (felder.ts allocDye)
+        { binding: 9, visibility: C, texture: { sampleType: 'float', viewDimension: '2d-array' } },   // Bandfarben-Tabelle über der Breite
       ],
     });
     this.buildPipes(false);
@@ -140,6 +152,7 @@ export class App {
         { binding: 4, visibility: F, texture: { sampleType: 'float', viewDimension: 'cube' } },
         { binding: 5, visibility: F, texture: { sampleType: 'float', viewDimension: 'cube' } },
         { binding: 6, visibility: F, texture: { sampleType: 'float', viewDimension: '2d-array' } },
+        { binding: 8, visibility: F, texture: { sampleType: 'float', viewDimension: 'cube' } },   // Helligkeit des Farbstoffs (darstellung.ts helligkeit)
       ],
     })] });
     this.sky = new Sky(device, kopflos ? 16 : isPhone ? 512 : 1024);

@@ -30,4 +30,16 @@ fn B(d: vec3f) -> vec4f {
 }
 
 fn texDir(id: vec3u, n: f32) -> vec3f { return faceDir(id.z, (vec2f(id.xy) + 0.5) / n); }
+
+// Pflege-Ziel (farbstoff.ts pflegeZiel, jeden Schritt neu): x = Band-Mäander-Rauschen.
+// Glattes Gradientenrauschen (Gitterabstand 1/4 auf der Einheitskugel, bei 768/8 ~15 Ziel-Texel je Zelle), daher auf
+// Farbstoff-Auflösung/8 bilinear abtastbar (gemessen 26.11.: Bild gleich, s. Bericht Teilauftrag 2); nicht nahtlos gefiltert, an Würfelkanten höchstens ein halbes Ziel-Texel Versatz.
+@group(0) @binding(8) var zielTex: texture_cube<f32>;
+fn Z(d: vec3f) -> vec4f { return textureSampleLevel(zielTex, samp, d, 0.0); }
+// Bandfarbe (hook_streifen) über der Breite als Tabelle: 4096 Einträge auf [-LUT_L, LUT_L]; Rand LUT_L = π/2 + 0,25
+// deckt den größten Mäander-Versatz ab (bandWobble ≤ 6 im Menü · 0,04 = 0,24).
+@group(0) @binding(9) var lutTex: texture_2d_array<f32>;
+const LUT_N = 4096.0;
+const LUT_L = 1.82079632679;
+fn bandLutAt(lat: f32) -> vec3f { return textureSampleLevel(lutTex, samp, vec2f((lat + LUT_L) / (2.0 * LUT_L), 0.5), 0, 0.0).rgb; }
 `;

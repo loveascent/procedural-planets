@@ -25,8 +25,6 @@ export interface EinbettungsKontext {
   anPx: number;
   /** Oberfläche eines Körpers neu backen (Seed/Vorlage aus dem Menü geändert) */
   neuGebacken: (k: Koerper) => void;
-  /** Schritte Vorrechnen („Einschwingen“) nach jedem Planetenwechsel; 0 = aus */
-  einschwingen: number;
   /** Blickrichtung und „oben“ der Welt-Kamera, senkrechter Blickwinkel, Seitenverhältnis */
   vor: V3; oben: V3; fov: number; aspekt: number;
 }
@@ -115,7 +113,7 @@ export function erstelleGasEinbettung(dev: GPUDevice, editor: HTMLElement) {
         status = 'aus';
         return null;
       }
-      if (!inst) { inst = new GasInstanz(dev, k.breite, k.hoehe); inst.app.warmSteps = k.einschwingen; inst.app.S.quality = tier; inst.app.applyQuality(true); }
+      if (!inst) { inst = new GasInstanz(dev, k.breite, k.hoehe); inst.app.warmSteps = 0; inst.app.S.quality = tier; inst.app.applyQuality(true); }   // kein Einschwingen: sofort zeigen
       if (aktiv !== ziel.id) {
         aktiv = ziel.id; deck = 0;
         // Derselbe Planet wie zuletzt: Strömung und Menü behalten (kein erneutes Vorrechnen); anderer Planet: neu aufsetzen
@@ -130,7 +128,6 @@ export function erstelleGasEinbettung(dev: GPUDevice, editor: HTMLElement) {
         }
       }
       inst.setzeGroesse(k.breite, k.hoehe);
-      inst.app.warmSteps = k.einschwingen;   // Einschwingen: Standard 0 (sofort zeigen), nur auf Wunsch vorrechnen
       editor.style.display = '';
       // Wahl im Menü des echten Planeten (Zufallsplanet, Vorlage) gilt auch für den Körper in der Welt und seine gebackene Kugel
       const wahl = inst.geaenderteWahl();

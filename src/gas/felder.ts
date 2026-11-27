@@ -3,6 +3,7 @@ import type { App } from './app';
 import { t } from '../i18n';
 import { loadNote } from './dom';
 import { CubeField } from './zustand';
+import { felderNeu } from './grafik/sim';
 
 export function cubeField(a: App, n: number): CubeField {
   const tex = a.device.createTexture({
@@ -17,7 +18,16 @@ export function cubeField(a: App, n: number): CubeField {
   };
 }
 
+/** Bandfarben-Tabelle: LUT_N×1, eine Schicht (Format wie die Würfelfelder, damit sie an Bindung 4 beschreibbar ist). */
+export const LUT_N = 4096;
+function tabelle(a: App, n: number): CubeField {
+  const tex = a.device.createTexture({ size: [n, 1, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING });
+  const store = tex.createView({ dimension: '2d-array' });
+  return { tex, n, cube: store, store };
+}
+
 export function allocVel(a: App) {
+  felderNeu(a);
   for (const f of [...a.vel, ...a.prs]) f.tex.destroy();
   a.aux?.tex.destroy(); a.div?.tex.destroy(); a.flow?.tex.destroy();
   const n = a.S.velRes;
@@ -44,9 +54,13 @@ export function memoryNote(a: App) {
 }
 
 export function allocDye(a: App) {
+  felderNeu(a);
   for (const f of a.dye) f.tex.destroy();
   a.device.pushErrorScope('out-of-memory');
   a.dye = [a.cubeField(a.S.dyeRes), a.cubeField(a.S.dyeRes)];
+  a.ziel?.tex.destroy(); a.lut?.tex.destroy();
+  a.ziel = a.cubeField(Math.max(32, a.S.dyeRes >> 3));
+  a.lut = tabelle(a, LUT_N);
   a.device.popErrorScope().then((err) => {
     if (!err || a.S.dyeRes <= 128) return;
     a.S.dyeRes = Math.max(128, (a.S.dyeRes / 2) | 0);
@@ -61,6 +75,7 @@ export function allocParticles(a: App) {
   const want = Math.min(a.S.particles, Math.floor(a.device.limits.maxStorageBufferBindingSize / 32));
   a.S.particles = want;
   if (want <= a.partCapacity) return;
+  felderNeu(a);
   a.parts?.destroy();
   a.device.pushErrorScope('out-of-memory');
   a.parts = a.device.createBuffer({ size: want * 32, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });

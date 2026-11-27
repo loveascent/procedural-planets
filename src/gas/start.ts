@@ -30,6 +30,7 @@ async function start() {
     return;
   }
   const device = await adapter.requestDevice({
+    requiredFeatures: adapter.features.has('shader-f16') ? ['shader-f16'] : [],   // nur für die Grafik-Option „shader-f16“
     requiredLimits: {
       maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
       maxBufferSize: adapter.limits.maxBufferSize,

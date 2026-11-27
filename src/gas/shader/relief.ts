@@ -1,8 +1,12 @@
 // Baustein Relief aus der Helligkeit der Wolken (helle Wolken liegen höher, dunkle tiefer): einfach oder mehrstufig (große Strukturen tief, feine Krümel schwach, Schrittweite nach Pixelgröße). Einhängepunkt: hook_relief.
 export const RELIEF_MEHRSTUFIG = /* wgsl */`
+// Würfeltextur-Abtastung braucht keine Einheitsrichtung: die Seitenwahl teilt durch die Hauptachse (Vulkan-Spezifikation,
+// „Cube Map Face Selection and Transformations“: s = ½(s_c/|m_a| + 1)), daher kein normalize() vor lumAt.
+// Helligkeit aus dem vorberechneten r16float-Würfel (darstellung.ts helligkeit): gleicher Wert wie lumAt, eine Komponente statt vier
+fn lumR(q: vec3f) -> f32 { return textureSampleLevel(lumTex, samp, q, 0.0).r; }
 // Helligkeit, über ein Kreuz der Breite s gemittelt (grobe Stufe ohne Mipmaps)
 fn lumBlur(q: vec3f, tb: mat2x3f, s: f32) -> f32 {
-  return 0.25 * (lumAt(normalize(q + tb[0] * s)) + lumAt(normalize(q - tb[0] * s)) + lumAt(normalize(q + tb[1] * s)) + lumAt(normalize(q - tb[1] * s)));
+  return 0.25 * (lumR(q + tb[0] * s) + lumR(q - tb[0] * s) + lumR(q + tb[1] * s) + lumR(q - tb[1] * s));
 }
 fn hook_relief(q: vec3f, d: vec3f, n0: vec3f, tPlanet: f32) -> vec3f {
   var n = n0;
@@ -10,8 +14,8 @@ fn hook_relief(q: vec3f, d: vec3f, n0: vec3f, tPlanet: f32) -> vec3f {
       let tb = tangentBasis(q);
       let foot = tPlanet * U.p3.y / max(dot(-d, n), 0.2);
       let e0 = max(3.0 / U.p2.w, foot * 1.5 * U.p4.w);
-      let fx = lumAt(normalize(q + tb[0] * e0)) - lumAt(normalize(q - tb[0] * e0));
-      let fy = lumAt(normalize(q + tb[1] * e0)) - lumAt(normalize(q - tb[1] * e0));
+      let fx = lumR(q + tb[0] * e0) - lumR(q - tb[0] * e0);
+      let fy = lumR(q + tb[1] * e0) - lumR(q - tb[1] * e0);
       var gx = fx * U.p4.z;
       var gy = fy * U.p4.z;
       for (var k = 0; k < 2; k++) {
@@ -19,8 +23,11 @@ fn hook_relief(q: vec3f, d: vec3f, n0: vec3f, tPlanet: f32) -> vec3f {
         // Unterschied über die breitere Strecke auf die Steigung der feinen Stufe umrechnen (×e₀/s), mit √ statt linear,
         // damit große Strukturen etwas mehr Tiefe behalten als ihre reine Steigung
         let w = U.p4.y * 0.5 * sqrt(e0 / s);
-        gx += (lumBlur(normalize(q + tb[0] * s), tb, s * 0.5) - lumBlur(normalize(q - tb[0] * s), tb, s * 0.5)) * w;
-        gy += (lumBlur(normalize(q + tb[1] * s), tb, s * 0.5) - lumBlur(normalize(q - tb[1] * s), tb, s * 0.5)) * w;
+        // Mitte des Kreuzes ohne normalize(): q und tb sind Einheitsvektoren und stehen senkrecht (tangentBasis), also |q ± tb·s| = √(1+s²);
+        // das Kreuz um die unnormierte Mitte mit √(1+s²) mal breiter zeigt in dieselben Richtungen (Würfelabtastung, siehe oben)
+        let sb = s * 0.5 * sqrt(1.0 + s * s);
+        gx += (lumBlur(q + tb[0] * s, tb, sb) - lumBlur(q - tb[0] * s, tb, sb)) * w;
+        gy += (lumBlur(q + tb[1] * s, tb, sb) - lumBlur(q - tb[1] * s, tb, sb)) * w;
       }
       n = normalize(n - (tb[0] * gx + tb[1] * gy) * U.p0.y * 3.0);
     }

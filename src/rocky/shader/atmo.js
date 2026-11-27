@@ -47,8 +47,12 @@ fn hook_luft_streuung(col: vec3f, cam: vec3f, dir: vec3f, b: f32, c2: f32, sun: 
   var t1 = -b + sq0;
   let dg = b * b - (c2 - R * R);
   if (dg > 0.0) { let tg = -b - sqrt(dg); if (tg > 0.0) { t1 = min(t1, tg); } }
+  if (luftEnde > 0.0) { t1 = min(t1, luftEnde); }   // Bodennähe: am echten Gelände enden (Tiefenpuffer, post.js)
   if (t1 <= t0) { return vec4f(col, 1.0); }
-  let NS = i32(U.Oz.w);
+  // Schrittzahl nach Streckenlänge: 4 bei kurzen Strecken, voll ab der Dicke der Lufthülle (Hillaire, EGSR 2020; Referenzcode
+  // sebh/UnrealEngineSkyAtmosphere, RenderSkyRayMarching.hlsl: lerp(MinSPP, MaxSPP, saturate(tMax · 0,01 km⁻¹)), MIT, © 2020 Epic Games).
+  // Am Boden enden die meisten Strahlen nach Metern; im Orbit bleibt es bei der vollen Zahl.
+  let NS = i32(mix(4.0, U.Oz.w, clamp((t1 - t0) / (Rt - R), 0.0, 1.0)));
   let dt = (t1 - t0) / f32(NS);
   let jit = ign(fp);
   let BR = U.BR.xyz;

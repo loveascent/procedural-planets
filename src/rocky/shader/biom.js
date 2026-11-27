@@ -30,12 +30,10 @@ fn earthBiome(d: vec3f, h: f32, m: f32, slope: f32, nz: f32) -> vec4f {
     return vec4f(a, 0.92);
   }
   let sea = U.T.z;
-  let lat = abs(d.y);
   let elev = max(h - sea, 0.0);
-  let temp = 1.0 - 1.25 * pow(lat, 1.35) - elev * 1.6 + nz * 0.08;
-  let latDeg = asin(lat) * 57.2958;
-  let circ = 0.35 * exp(-sq(latDeg / 10.0)) - 0.35 * exp(-sq((latDeg - 25.0) / 9.0)) + 0.15 * exp(-sq((latDeg - 55.0) / 12.0));
-  let moist = clamp(m * 0.8 + circ + 0.08 - elev * 0.3 + nz * 0.05, 0.0, 1.0);
+  let kl = klima(d, elev, m, nz);              // Temperatur und Feuchte (scene_hilfen.js, auch fürs Gras)
+  let temp = kl.x;
+  let moist = kl.y;
   let desert = mix(vec3f(0.56, 0.41, 0.25), vec3f(0.45, 0.24, 0.12), clamp(nz * 0.8 + 0.5, 0.0, 1.0));
   let steppe = vec3f(0.30, 0.26, 0.14);
   let grass = vec3f(0.12, 0.15, 0.055);

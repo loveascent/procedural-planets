@@ -22,6 +22,8 @@ Die Implementierung ist eigenständig. Wir danken den Autorinnen und Autoren:
 ### Verfahren und Artikel
 | Quelle | Was wir daraus gelernt haben |
 |---|---|
+| S. Hillaire, Referenzcode [UnrealEngineSkyAtmosphere](https://github.com/sebh/UnrealEngineSkyAtmosphere) (MIT, © 2020 Epic Games), `RenderSkyRayMarching.hlsl` | Zahl der Strahlschritte in der Luft wächst mit der Streckenlänge (4 am Boden, voll ab der Dicke der Lufthülle); eigenes WGSL |
+| AskAlice, [threejs-grass / threejs-worldgen](https://github.com/AskAlice/threejs-worldgen) (Apache-2.0) | Grasfeld in `demos/gras/`: Wind-, Biege- und Kämm-Formeln, Halmprofil und Schattierungswerte in reinem WGSL nachgebaut (ohne three.js, Kommentare markieren die übernommenen Werte) |
 | Jos Stam, *Stable Fluids*, SIGGRAPH 1999 | Grundverfahren: Advektion, Druck-Projektion |
 | Mark J. Harris, *Fast Fluid Dynamics Simulation on the GPU*, GPU Gems Kap. 38 (2004) | GPU-Aufteilung in Pässe, kompakter Jacobi-Stern |
 | mofu, [*Stable Fluids with three.js*](https://mofu-dev.com/en/blog/stable-fluids/) (2022) | anschauliche Herleitung, BFECC-Advektion |
@@ -49,6 +51,18 @@ Die Implementierung ist eigenständig. Wir danken den Autorinnen und Autoren:
 
 Bilder von NASA, Juno, Hubble und aus dem Web wurden nur im Gespräch als Vergleich benutzt
 und sind **nicht** Teil des Repos.
+
+### Grafik-Optionen: Bildrate und Glättung (`src/grafik/`, `src/gas/grafik/`)
+| Quelle | Verwendung |
+|---|---|
+| Yang, Liu, Salvi, *A Survey of Temporal Antialiasing Techniques*, CGF 2020 | TAA, zeitliches Hochskalieren, Verlauf prüfen/kappen, Schachbrett- und Zeilensprung-Rekonstruktion, Rückprojektion |
+| M. Salvi, *An Excursion in Temporal Supersampling*, GDC 2016 | Varianz-Kappen, 10 % Anteil des neuen Bildes |
+| T. Lottes, *FXAA* whitepaper, NVIDIA 2009 | FXAA-Verfahren (Schritte und Gütewerte), eigene Umsetzung |
+| A. Reshetov, *Morphological Antialiasing*, 2009; Jimenez et al., *SMAA*, 2012 | morphologische Kantenglättung: Kantentest und Deckungsflächen, eigene Umsetzung ohne Diagonalen |
+| T. Lottes, *FidelityFX Super Resolution 1.0*, SIGGRAPH 2021 course (talk text); Bigün & Granlund 1987 | kantenadaptives Hochskalieren nach der Beschreibung; Merkmalsmaß ist die Kohärenz des Strukturtensors (kein AMD-Code, nicht identisch) |
+| AMD, *FidelityFX CAS* presentation, GDC 2019 | kontrastadaptives Schärfen, eigene Umsetzung |
+| M. Pettineo (TheRealMJP), *Tex2DCatmullRom.hlsl*-Gist (MIT-Lizenz, https://gist.github.com/TheRealMJP/c83b8c0f46b63f3a88a5986f4fa982b1), nach vec3.ca *Bicubic filtering in fewer taps*; R. Keys 1981; K. Turkowski 1990 | Catmull-Rom-Gewichte mit 9 Zugriffen beim zeitlichen Verlauf (aus dem MIT-Gist übernommen); Lanczos |
+| J. Jimenez, interleaved gradient noise (2014, temporal variant 2016) | Dithering der Ausgabe und Versatz des Strahlstarts |
 
 ### Schriften und Werkzeuge
 IBM Plex Sans/Mono (SIL OFL), Barlow Condensed (SIL OFL), über Google Fonts geladen.

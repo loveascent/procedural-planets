@@ -3,10 +3,14 @@ import type { App } from './app';
 import { t } from '../i18n';
 import { canvas } from './dom';
 import { Preset } from '../presets';
-import { S } from './zustand';
+import { S, DEFAULTS } from './zustand';
+
+const fxSchluessel = Object.keys(DEFAULTS).filter((k) => k.startsWith('fx')) as Exclude<keyof typeof S, 'paused'>[];
 
 export function snapshot(a: App): string {
   const { paused: _paused, ...rest } = a.S;
+  // Grafik-Optionen stehen nur im Code, wenn sie an sind (alles aus: derselbe Code wie ohne sie)
+  for (const k of fxSchluessel) if (rest[k] === DEFAULTS[k]) delete (rest as Record<string, unknown>)[k];
   return JSON.stringify({ v: 1, s: rest, preset: a.preset });
 }
 
@@ -48,7 +52,8 @@ export function restore(a: App, json: string) {
   const old = snap.s as Partial<typeof S> & { track?: string };
   const compat: Partial<typeof S> = old.track === 'fluid' ? { flow: 'fluid', look: 'dye' } : old.track === 'particles' ? { flow: 'curl', look: 'pure' } : {};
   delete old.track;
-  Object.assign(a.S, old, compat, { paused: prev.paused });
+  const aus = Object.fromEntries(fxSchluessel.map((k) => [k, DEFAULTS[k]]));   // fehlt eine Grafik-Option im Code, ist sie aus
+  Object.assign(a.S, aus, old, compat, { paused: prev.paused });
   a.buildPipes(a.S.seamless);
   a.dpr = a.S.pixelDensity;
   if (prev.retro !== a.S.retro) a.spin = -a.spin;

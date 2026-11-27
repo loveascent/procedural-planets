@@ -1,9 +1,9 @@
 // Himmel im Bild: Milchstraßen-Karte + punktförmige Sterne (Gauß-Scheibchen, pixelgenau, ohne Flimmern).
 // n = Kartengröße (0 = Karte noch nicht fertig), neb/stars = Helligkeiten, pix = Pixelwinkel.
-fn sky_stars(d: vec3f, pix: f32, dens: f32) -> vec3f {
+fn sky_stars(d: vec3f, pix: f32, dens: f32) -> vec3f { let f = sky_face(d); return sky_stars_fu(f, sky_uv(d, f), pix, dens); }
+// Seite und uv kommen vom Aufrufer: skyColor braucht sie ohnehin für die Karte (spart je Himmelspixel sky_face + zwei atan)
+fn sky_stars_fu(f: i32, uv: vec2f, pix: f32, dens: f32) -> vec3f {
   var acc = vec3f(0.0);
-  let f = sky_face(d);
-  let uv = sky_uv(d, f);
   var keeps = array<f32, 3>(0.3, 0.2, 0.12);
   var gains = array<f32, 3>(1.0, 0.55, 0.3);
   for (var L = 0; L < 3; L++) {
@@ -26,12 +26,13 @@ fn sky_stars(d: vec3f, pix: f32, dens: f32) -> vec3f {
 fn skyColor(tx: texture_2d_array<f32>, sm: sampler, d: vec3f, pix: f32, n: f32, neb: f32, stars: f32) -> vec3f {
   var col = vec3f(0.0);
   var dens = 0.4;
+  let f = sky_face(d);
+  let uv0 = sky_uv(d, f);
   if (n > 0.5) {
-    let f = sky_face(d);
-    let uv = sky_uv(d, f) * ((n - 1.0) / n) + 0.5 / n;
+    let uv = uv0 * ((n - 1.0) / n) + 0.5 / n;
     let nb = textureSampleLevel(tx, sm, uv, f, 0.0);
     col = nb.rgb * neb;
     dens = nb.a;
   }
-  return col + sky_stars(d, pix, dens) * stars;
+  return col + sky_stars_fu(f, uv0, pix, dens) * stars;
 }

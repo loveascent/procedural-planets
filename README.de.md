@@ -15,6 +15,7 @@ keine: Jedes Wolkenband, jede Küste und jede Trümmerwolke kommt aus Gleichunge
 [Gasriese](https://loveascent.github.io/procedural-planets/index.html) ·
 [Gesteinsplanet](https://loveascent.github.io/procedural-planets/index.html?body=rocky) ·
 [Sahne im Kaffee](https://loveascent.github.io/procedural-planets/coffee.html) ·
+[WebGPU-Grasfeld](https://loveascent.github.io/procedural-planets/gras/) ·
 [alle Versionen seit v0.1](#versionen-vom-ersten-prototyp-bis-zum-sonnensystem)
 
 Braucht einen Browser mit WebGPU: Chrome/Edge 113+, Safari 26+, Firefox 141+, Android-Chrome 121+.

@@ -42,6 +42,10 @@ export class Sky {
   readonly view: GPUTextureView;
   ready = false;
   private face = 6;
+  private lauf = 0;
+  /** ändert sich mit jeder neu gerechneten Seite der Karte (für den Himmel-Zwischenspeicher) */
+  get stand() { return this.lauf * 8 + this.face; }
+  get fertig() { return this.face > 6; }
   private params: Float32Array = new Float32Array(32);
   private genPipe: GPUComputePipeline;
   private mipPipe: GPUComputePipeline;
@@ -62,6 +66,7 @@ export class Sky {
   generate(seed: string, look: SkyLook = SKY_DEFAULT) {
     this.params = skyParams(seed, look);
     this.face = 0;
+    this.lauf++;
   }
 
   /** Pro Bild aufrufen (vor dem Zeichnen): rechnet höchstens eine Würfelseite, zuletzt die Mipmaps. */

@@ -1,5 +1,9 @@
 import { clamp } from '../logik/zufall.js';
 import { t } from '../../i18n';
+import { zuFrueh } from '../../grafik/menue';
+import { rueckstau } from '../../grafik/stau';
+import { BODEN } from '../kamera/kamera.js';
+import { SP, spielerSchritt } from '../kamera/spieler.js';
 
 
 // Hauptschleife: Bildgröße, Auflösungs-Automatik (60 fps halten), ein Schritt je Bild, Rückleseprobe für Prüfbilder.
@@ -36,7 +40,9 @@ export function createSchleife(ext) {
     if (ms > (coarse ? 24 : 17.5) && ext.dynScale > 0.45) ext.dynScale = Math.max(0.45, ext.dynScale * 0.85);
     else if (ms < (coarse ? 14 : 11) && ext.dynScale < top) ext.dynScale = Math.min(top, ext.dynScale * 1.08);
   }
+  const stau = rueckstau();
   function step(now) {
+    if (stau.voll() || zuFrueh(S.fxCap, now, ext.last)) { requestAnimationFrame(step); return; }   // Rückstau-Bremse und Bildraten-Deckel
     const dt = Math.min(0.1, (now - ext.last) / 1000);
     ext.last = now;
     adaptScale(dt, now);
@@ -47,6 +53,7 @@ export function createSchleife(ext) {
     }
     if (S.rotate) ext.spin += S.spin * Math.PI / 180 * dt * Math.pow(clamp((cam.dist - 1) / 1.2, 0, 1), S.spinZoom);
     ext.simTime += dt;
+    spielerSchritt(S, dt, BODEN, ext.simTime);   // Spielball (nur mit S.spieler)
     const enc = ext.device.createCommandEncoder();
     // Erzeugung im Zeitbudget
     if (ext.jobs.length) {
@@ -61,12 +68,13 @@ export function createSchleife(ext) {
     } else gb.hidden = true;
     // Stillstand: ändert sich nichts am Bild, wird nicht neu gezeichnet (Akku, Handy, schwache Grafik). Die Drehung zählt erst ab ~0,05°
     // (≈ 1 Pixel); Wellen und Wolken laufen nur, wenn sie an sind und etwas zeigen. Karten-Aufträge und Bausteinwechsel zeichnen immer.
-    const bewegtSich = (S.modWaves && ext.seaH > 0.01) || (S.modClouds && S.cover > 0);
+    const bewegtSich = (S.modWaves && ext.seaH > 0.01) || (S.modClouds && S.cover > 0) || BODEN.grasSichtbar || (S.spieler && S.boden);   // Gras: Wind, Spielball: Bewegung
     const sig = [JSON.stringify(S), cam.yaw, cam.pitch, cam.dist, cam.tDist, Math.floor(ext.spin / 8.7e-4), bewegtSich ? Math.floor(ext.simTime * 30) : 0,
       ext.seaH, RS.nebReady, RS.cloudReady, ext.regenBusy, canvas.width, canvas.height].join('|');
     const gleich = sig === ext.letzteSig && ext.P.planet === ext.letztePipe && !ext.jobs.length && Math.abs(cam.dist - cam.tDist) < 1e-4;
     if (!OFFSCREEN && !gleich) { render(enc); ext.letzteSig = sig; ext.letztePipe = ext.P.planet; }          // im Testmodus nur für Fotos zeichnen
     ext.device.queue.submit([enc.finish()]);
+    stau.abgegeben(ext.device.queue);
     ext.fpsAcc += dt; ext.fpsN++;
     if (now - ext.fpsT > 500) { $('fps').textContent = `${Math.round(ext.fpsN / Math.max(ext.fpsAcc, 1e-3))} fps · ${(1000 * ext.fpsAcc / Math.max(ext.fpsN, 1)).toFixed(2)} ms`; ext.fpsAcc = 0; ext.fpsN = 0; ext.fpsT = now; }
     requestAnimationFrame(step);
@@ -92,6 +100,8 @@ export function createSchleife(ext) {
   // Schnittstelle für Tests und Bildschirmfotos
   const planetsApi = {
     S, get busy() { return ext.jobs.length > 0 || ext.regenBusy > 0; },
+    /** Messwerte für Tests: gezeichnete und weggeschnittene Kacheln, Bodenhöhe unter der Kamera, Abstand. */
+    get info() { return { kacheln: RS.kacheln, kachelnWeg: RS.kachelnWeg, bodenH: BODEN.h, bodenGueltig: BODEN.gueltig, dist: cam.dist, gras: BODEN.grasSichtbar, ballH: BODEN.ballH, ballWasser: BODEN.ballWasser, ballGueltig: BODEN.ballGueltig, spieler: S.spieler ? { p: SP.p, fw: SP.fw, h: SP.h, vy: SP.vy, roll: SP.roll, strecke: SP.strecke, imWasser: SP.imWasser } : null }; },
     set(k, v) { S[k] = v; if (k === 'style') { buildUI(); regenerate(); } else if (k === 'seed') newSeed(v); else changed({ k }); buildUI(); },
     async finish() {
       await ext.variantenNachziehen();   // Baustein-Varianten fertig übersetzt und eingesetzt, bevor Bilder entstehen
@@ -109,6 +119,8 @@ export function createSchleife(ext) {
       if (opt.time !== undefined) ext.simTime = opt.time;
       if (opt.yaw !== undefined) cam.yaw = opt.yaw;
       if (opt.pitch !== undefined) cam.pitch = opt.pitch;
+      if (opt.blickYaw !== undefined) cam.blickYaw = opt.blickYaw;
+      if (opt.blickPitch !== undefined) cam.blickPitch = opt.blickPitch;
       // Kamera auf das Zentrum der Milchstraße richten (für Testbilder)
       if (opt.core && RS.galCore) { const c = RS.galCore; cam.yaw = Math.atan2(-c[0], -c[2]); cam.pitch = clamp(Math.asin(-c[1]), -1.45, 1.45); }
       if (opt.dist !== undefined) { cam.dist = cam.tDist = opt.dist; cam.zoomed = true; }

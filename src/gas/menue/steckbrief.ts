@@ -2,6 +2,7 @@
 import type { App } from '../app';
 import { ANSICHT } from '../zustand';
 import { lang, t } from '../../i18n';
+import { grafikKnopfEinhaengen } from '../../grafik/links';
 
 export function updateInfo(app: App) {
   const info = document.getElementById('planet-info');
@@ -35,4 +36,5 @@ export function updateInfo(app: App) {
     + ` <button type="button" class="facts-more" aria-expanded="${ANSICHT.factsOpen}">${ANSICHT.factsOpen ? t('weniger ▴', 'less ▴') : t('mehr ▾', 'more ▾')}</button></div>`
     + `<dl class="facts${ANSICHT.factsOpen ? '' : ' short'}">${shown.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
   info.querySelector('.facts-more')?.addEventListener('click', () => { ANSICHT.factsOpen = !ANSICHT.factsOpen; app.updateInfo(); });
+  grafikKnopfEinhaengen();   // „Grafik ▾“ gleich neben „mehr ▾“
 }

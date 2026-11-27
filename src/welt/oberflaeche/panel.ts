@@ -2,7 +2,9 @@
 // Abschnitte: Zeit, Ansicht, Kollisionen, Qualität, Bausteine. Die Regler der echten Planeten kommen darunter aus ihren eigenen Menüs.
 import { Panel, type Settings } from '../../ui.ts';
 import { BAUSTEINE } from '../bausteine.ts';
+import { KETTE_STANDARD, ketteRegler, ketteSichtbar, type KettenStand } from '../../grafik/menue.ts';
 import { FELS_BAUSTEINE, GAS_BAUSTEINE } from '../typBausteine.ts';
+import { grafikNachLinks } from '../../grafik/links.ts';
 import type { Art, Koerper, Welt } from '../physik/koerper.ts';
 import { alsCode, alsDatei, ausCode, ausDatei, legeAb, plaetze, type WeltStand } from '../speichern.ts';
 
@@ -22,7 +24,7 @@ export interface Steuerung {
 }
 
 /** Startwerte der Zahlen-Einstellungen der Welt (die Schalter stehen in `bausteine.ts`). */
-export const WELT_STANDARD = { nurAuswahl: false, einschwingen: 0, qualitaet: 'mittel', tempoLog: Math.log10(0.05), pause: false, aufl: 1, anPx: 90, stoss: 120, stossR: 0.6 };
+export const WELT_STANDARD = { ...KETTE_STANDARD, nurAuswahl: false, qualitaet: 'mittel', tempoLog: Math.log10(0.05), pause: false, aufl: 1, anPx: 90, stoss: 120, stossR: 0.6 };
 
 const el = <T extends HTMLElement>(tag: string, attr: Record<string, string> = {}, text = ''): T => {
   const e = document.createElement(tag) as T;
@@ -35,11 +37,9 @@ export function baueOberflaeche(s: Steuerung, E: Settings, standard: Settings, w
   const wurzel = document.getElementById('welt-menue') as HTMLElement;
   wurzel.innerHTML = '';
   const p = new Panel(wurzel, E, wirkt, standard);
+  grafikNachLinks(p);   // Grafik-Abschnitte der Welt in die Leiste links
   const hudStatus = document.getElementById('welt-status') as HTMLElement;
 
-  p.section('Qualität (alle Planeten)', 'Ein Regler für alles: Auflösung der echten Planeten, ab wann ein Planet echt gerechnet wird, Gitter und Farbauflösung des Gasriesen, Kartenauflösung des Gesteinsplaneten. Die Feinregler stehen weiter unten im Menü des jeweiligen Planeten.')
-    .select('qualitaet', 'Qualität', [['niedrig', 'Niedrig (schwache Grafikkarte)'], ['mittel', 'Mittel'], ['hoch', 'Hoch'], ['ultra', 'Ultra (RTX 4080/5080)']],
-      'Niedrig rechnet nur ganz nahe Planeten echt und mit kleiner Auflösung; Ultra rechnet früher, schärfer und mit großen Gittern. Wirkt sofort auf die echten Planeten.');
   p.section('Zeit', 'Die Bahnen der Körper. Die Oberflächen der echten Planeten (Strömung, Wolken) laufen unabhängig davon in Echtzeit.')
     .range('tempoLog', 'Tempo der Bahnen', -2.5, 1.6, 0.05,
       'Wie schnell die Welt vergeht. Klein = man kann Monde und Einschläge in Ruhe ansehen; groß = die Planeten ziehen sichtbar ihre Bahn. Ändert nur die Zeit, nicht die Physik.',
@@ -79,11 +79,17 @@ export function baueOberflaeche(s: Steuerung, E: Settings, standard: Settings, w
     ], { 'btn-nachbar': 'Der nächste Nachbar bekommt Kurs auf die Auswahl.' })
     .custom(seedZeile).custom(ereignisKasten);
 
-  // --- Qualität ---
-  p.section('Qualität der echten Planeten', 'Die nächsten großen Planeten laufen mit ihren echten Bausteinen. Diese Regler bestimmen, wie viel Rechenleistung sie bekommen. Weitere Regler (Gitter, Farbauflösung, Partikel, Oberflächenkarten) stehen im Menü des jeweiligen Planeten weiter unten.')
+  // --- Grafik: Qualität der Planeten, gleich danach Bildrate und Glättung ---
+  p.section('Grafik: Qualität der Planeten', '„Qualität“ stellt alles auf einmal: Auflösung der echten Planeten, ab wann ein Planet echt gerechnet wird, Gitter und Farbauflösung des Gasriesen, Kartenauflösung des Gesteinsplaneten. Die übrigen Regler stellen einzeln nach. Weitere Feinregler (Gitter, Farbauflösung, Partikel, Oberflächenkarten) stehen im Menü des jeweiligen Planeten unter „Grafik“.')
+    .select('qualitaet', 'Qualität', [['niedrig', 'Niedrig (schwache Grafikkarte)'], ['mittel', 'Mittel'], ['hoch', 'Hoch'], ['ultra', 'Ultra (RTX 4080/5080)']],
+      'Niedrig rechnet nur ganz nahe Planeten echt und mit kleiner Auflösung; Ultra rechnet früher, schärfer und mit großen Gittern. Wirkt sofort auf die echten Planeten.')
     .range('aufl', 'Auflösung der echten Planeten', 0.35, 2, 0.05, '1 = Bildschirmauflösung; darüber = Supersampling (schärfere Kanten und Filamente, wie „Render-Auflösung“ auf den Planetenseiten); darunter = schneller, weicheres Bild.', (v) => `${v.toFixed(2)}×`)
-    .range('einschwingen', 'Einschwingen (Vorrechnen)', 0, 1200, 20, 'Wie viele Schritte die Strömung eines Gasriesen vorgerechnet wird, bevor man ihn sieht. 0 = sofort zeigen (die Strömung entwickelt sich beim Zuschauen). Mehr Schritte = ruhigere, ausgeprägtere Bänder und Stürme, aber Wartezeit und niedrige Bildrate beim Anfliegen.', (v) => (v === 0 ? 'aus' : `${v} Schritte`))
     .range('anPx', 'Echte Planeten ab Radius (Pixel)', 30, 300, 5, 'Ab diesem Radius auf dem Bildschirm wird ein Planet „echt“ gerechnet. Kleiner = schon aus der Ferne live (mehr Last), größer = erst ganz nah.', (v) => `${v.toFixed(0)} px`);
+
+  // --- Grafik-Optionen (Bildkette der ganzen Szene) ---
+  p.section('Grafik: Bildrate und Glättung', 'Wirkt auf das ganze Bild der Welt. Alles aus = Bild wie ohne diese Optionen.');
+  ketteRegler(p, { dither: true });
+  ketteSichtbar(p, E as unknown as KettenStand);
 
   // --- Speichern und Laden ---
   const sp = el('div');

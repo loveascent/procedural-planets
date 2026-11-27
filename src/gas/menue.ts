@@ -12,8 +12,9 @@ import { abschnittCurl } from './menue/curl';
 import { abschnittPartikel } from './menue/partikel';
 import { abschnittRelief } from './menue/relief';
 import { abschnittLicht } from './menue/licht';
-import { abschnittGpu } from './menue/gpu';
+import { abschnittGrafik } from './menue/grafik';
 import { Panel } from '../ui';
+import { grafikNachLinks } from '../grafik/links';
 import { t } from '../i18n';
 import { Key, DEFAULTS } from './zustand';
 
@@ -45,7 +46,7 @@ export function buildUI(app: App) {
   abschnittPartikel(p, k);
   abschnittRelief(p, k);
   abschnittLicht(p, k);
-  abschnittGpu(p, k);
+  abschnittGrafik(p, k);
   app.panel.section(t('Speichern und Rückgängig', 'Save and undo'), t('Strg+Z / Strg+Y machen Änderungen rückgängig. Doppelklick auf einen Reglernamen setzt nur diesen zurück.', 'Ctrl+Z / Ctrl+Y undo and redo. Double-click a control name to reset just that control.'));
   app.buildSaveSection();
   app.panel.section(t('Diagnose', 'Diagnostics'), undefined, false)
@@ -62,6 +63,7 @@ export function buildUI(app: App) {
       t('Tastet an Würfelkanten die Nachbartexel einzeln ab, statt der Hardware zu vertrauen. Nur nötig, wenn der Selbsttest eine Naht findet; kostet etwas Leistung.',
         'Samples neighbouring texels one by one at cube edges instead of trusting the hardware. Only needed if the self-test finds a seam; costs some performance.'))
     .custom(app.diagNote());
+  if (!app.kopflos) grafikNachLinks(p);   // Grafik-Abschnitte in die Leiste links
   if (!app.kopflos) app.buildToolbar();   // Knopfleiste und Kopfzeile gehören der Seite des Gasriesen, nicht der eingebetteten Instanz
   app.updateVisibility();
   if (!app.kopflos) app.applyStaticText();

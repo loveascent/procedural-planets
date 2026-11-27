@@ -85,16 +85,37 @@ and are **not** part of the repository. Screenshots in `docs/images/` are render
 | I. Quilez, domain warping and analytic noise derivatives | warped fBm for clouds and nebula, derivative-based normals |
 | E. Bruneton, *Precomputed Atmospheric Scattering: a New Implementation* (2017) | transmittance table parameterisation |
 | S. Hillaire, *A Scalable and Production Ready Sky and Atmosphere Rendering Technique* (EGSR 2020) | Rayleigh, Mie and ozone coefficients |
+| S. Hillaire, reference code [UnrealEngineSkyAtmosphere](https://github.com/sebh/UnrealEngineSkyAtmosphere) (MIT, © 2020 Epic Games), `RenderSkyRayMarching.hlsl` | atmosphere ray-march step count grows with ray length (4 near the ground, full from one atmosphere thickness); own WGSL |
+| AskAlice, [threejs-grass / threejs-worldgen](https://github.com/AskAlice/threejs-worldgen) (Apache-2.0) | grass field in `demos/gras/`: wind gust, bend and comb formulas, blade profile and shading values re-implemented in plain WGSL (no three.js, comments mark the adopted values) |
 | C. Cox & W. Munk (1954); R. Pope & E. Fry (1997) | sun-glint slope variance; absorption of pure water |
 | L. G. Henyey & J. L. Greenstein (1941) | cloud forward scattering |
 | B. Walter et al. (2007), GGX; K. Narkowicz, ACES fit (2016); J. Jimenez, bloom (2014) | specular highlights, film curve, bloom (first stage with Karis average against flickering fireflies) |
-| F. Strugar, *Continuous Distance-Dependent Level of Detail for Rendering Heightmaps* (CDLOD, 2009) | quadtree terrain tiles with geomorphing |
+| F. Strugar, *Continuous Distance-Dependent Level of Detail for Rendering Heightmaps* (CDLOD, 2009) | quadtree terrain tiles with geomorphing and frustum culling of the tiles |
+| webgpu-samples, [reversedZ](https://github.com/webgpu/webgpu-samples) (BSD-3-Clause) | reversed-Z depth buffer (float depth, clear to 0, compare `greater`), own implementation |
+| N. Reed, *Depth Precision Visualized* (NVIDIA, 2015) | why reversed floating-point depth keeps precision from orbit down to eye height |
+| G. Gribb & K. Hartmann, *Fast Extraction of Viewing Frustum Planes from the World-View-Projection Matrix* (2001) | six frustum planes from the matrix rows for tile culling |
+| D. Ohlarik, *Precisions, Precisions* (AGI, 2008) | relative-to-centre (RTC) tiles: vertex positions relative to a per-tile origin against float jitter near the ground |
+| I. Quilez, *Gradient Noise Derivatives* | analytic derivatives of the near-ground detail octaves (normals without extra samples) |
+| simondevyoutube, [Quick_Grass](https://github.com/simondevyoutube/Quick_Grass) (MIT, © 2023 simondevyoutube) | blade shape, wind sway, `murmurHash33` for per-blade randomness (own implementation after it) |
+| SimonDev, *3D World Generation* #10 and #11 (YouTube) | ideas: zoom down to eye height, tile precision, grass near the camera (ideas only, no code) |
 | R. Barnes, C. Lehman, D. Mulla, *Priority-Flood* (Computers & Geosciences, 2014) | filling sinks into lakes, drainage directions |
 | J. O'Callaghan & D. Mark (1984), flow accumulation; L. Leopold & T. Maddock (1953), hydraulic geometry | river discharge, width ∝ Q^0.5, depth ∝ Q^0.4 |
 | N. McDonald, *Procedural Hydrology* (2020) | reference for carving rivers into the terrain and filling basins (idea, not code) |
 | Z. M. Leinhardt & S. T. Stewart, *Collisions between Gravity-Dominated Bodies. I. Outcome Regimes and Scaling Laws* (ApJ 745, 79, 2012; arXiv:1109.4588) | collision outcome in the world layer: Q*_RD, largest remnant, hit-and-run limit (`src/welt/physik/leinhardt.ts`) |
 | A. Emsenhuber, E. Asphaug, S. Cambioni, T. Gabriel, S. Schwartz, R. Melikyan, C. A. Denton, *A New Database of Giant Impacts over a Wide Range of Masses and with Material Strength* (PSJ 2024; arXiv:2401.17356) | debris speed ≈ half the impact speed (newer than the 1.1 v_esc used by N-body codes) |
 | S. Childs & J. Steffen, *Collisional fragmentation and bulk composition tracking in REBOUND* (2022; arXiv:2201.05714); H. Rein & S.-F. Liu, REBOUND (A&A 537, A128, 2012) | cross-check of the above, fragment speed 1.1 v_esc, equal-mass fragments, hard-sphere bounce with restitution |
+
+### Graphics options: frame rate and anti-aliasing (`src/grafik/`, `src/gas/grafik/`)
+| Source | Used for |
+|---|---|
+| Yang, Liu, Salvi, *A Survey of Temporal Antialiasing Techniques*, CGF 2020 | TAA, temporal upscaling, history rejection/clipping, checkerboard and interlaced reconstruction, reverse reprojection |
+| M. Salvi, *An Excursion in Temporal Supersampling*, GDC 2016 | variance clipping, 10 % new-frame weight |
+| T. Lottes, *FXAA* whitepaper, NVIDIA 2009 | FXAA method (steps and quality constants), own implementation |
+| A. Reshetov, *Morphological Antialiasing*, 2009; Jimenez et al., *SMAA*, 2012 | morphological anti-aliasing: edge test and coverage areas, own implementation without diagonals |
+| T. Lottes, *FidelityFX Super Resolution 1.0*, SIGGRAPH 2021 course (talk text); Bigün & Granlund 1987 | edge-adaptive upscaling after the description; the feature measure is the structure-tensor coherence (not AMD’s code, not identical) |
+| AMD, *FidelityFX CAS* presentation, GDC 2019 | contrast-adaptive sharpening, own implementation |
+| M. Pettineo (TheRealMJP), *Tex2DCatmullRom.hlsl* gist (MIT licence, https://gist.github.com/TheRealMJP/c83b8c0f46b63f3a88a5986f4fa982b1), after vec3.ca *Bicubic filtering in fewer taps*; R. Keys 1981; K. Turkowski 1990 | Catmull-Rom 9-tap weights in the temporal history sampling (adapted from the MIT gist); Lanczos |
+| J. Jimenez, interleaved gradient noise (2014, temporal variant 2016) | output dithering and ray-start jitter |
 
 ### Fonts and tools
 IBM Plex Sans/Mono (SIL OFL), Barlow Condensed (SIL OFL), loaded via Google Fonts.

@@ -1,12 +1,16 @@
 // Modul „Zustand merken“: eingeschwungenen Zustand im Browser speichern (IndexedDB) und wieder laden.
 import type { App } from './app';
 import { showLoading } from './dom';
-import { VIEW_ONLY, CubeField } from './zustand';
+import { VIEW_ONLY, DEFAULTS, CubeField } from './zustand';
 
 /** Schlüssel: alle Regler, die die Rechnung beeinflussen, plus Lauf-Nummer. Andere Werte = anderer Zustand. */
 export function stateKey(app: App): string {
   const o: Record<string, unknown> = { run: app.runSeed, warm: app.warmSteps };
-  for (const [k, v] of Object.entries(app.S)) if (!VIEW_ONLY.has(k)) o[k] = v;
+  for (const [k, v] of Object.entries(app.S)) {
+    // Grafik-Optionen ändern die Rechnung nicht, außer Rechentakt und Farbpflege (und auch die nur, wenn sie an sind)
+    if (k.startsWith('fx') && !((k === 'fxSimRate' || k === 'fxCare') && v !== (DEFAULTS as Record<string, unknown>)[k])) continue;
+    if (!VIEW_ONLY.has(k)) o[k] = v;
+  }
   return JSON.stringify(o);
 }
 
